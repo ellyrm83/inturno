@@ -1891,7 +1891,7 @@ async function renderCC() {
       const cm = month(); const secs = cm ? [...new Set([...cm.sectorOf.values()])] : [];
       h += `<div class="gbox" style="border-color:${gColor(g)}"><div class="ph"><b style="font-size:16px">${gEmo(gd)} ${esc(gd.nome)}</b><span><button class="mini" id="gren">Rinomina</button> <button class="mini" id="gleave">Esci</button></span></div>
         <button class="btn orgbtn" id="gorg">🎉 Organizza con ${esc(gd.nome)}</button>
-        ${wa(`Ciao! Ti aspetto nel gruppo "${gd.nome}" su InTurno, l'app per incastrare turni e uscite 😊 Apri il link, crea il tuo profilo e ti approvo: ${APP_URL}`, "btn ghost wa full", "🟢 Invita nel gruppo su WhatsApp")}
+        ${window.__isOwner ? `<p class="muted" style="font-size:12px;margin:4px 0">Per far entrare qualcuno di nuovo nell'app crea un codice invito (riquadro 🎟️ qui sopra), poi invitalo nel gruppo qui sotto.</p>` : ""}
         <div class="muted" style="margin:4px 0">Membri: tu${mem.map(x => ", " + esc(x.d.nome) + (x.sh ? "" : " <span title=\"non condivide i turni con questo gruppo\">🔒</span>")).join("")}</div>
         <label class="row shrow" style="gap:8px;align-items:flex-start;margin:6px 0"><input type="checkbox" data-shg="${g}" ${CC.shareG[g] ? "checked" : ""} style="margin-top:3px"> <span>Condividi con <b>${esc(gd.nome)}</b> i miei turni (con le modifiche) e gli statini</span></label>
         ${inv.length ? `<div class="muted">Invitate in attesa: ${inv.map(u => esc(nameOfU(u))).join(", ")}</div>` : ""}
@@ -2729,7 +2729,7 @@ function unlock() { document.body.classList.remove("locked"); }
 async function gate(db, user) {
   if (!db || !user || !ST.uid) { gateMsg(`<p>Accedi con il tuo account per usare l'app.</p>`); return false; }
   const owner = await user.isOwner();
-  if (owner) { unlock(); startAdmin(db, user); return true; }
+  if (owner) { window.__isOwner = true; unlock(); startAdmin(db, user); return true; }
   return new Promise(resolve => {
     let done = false;
     db.doc("approvati/" + ST.uid).onSnapshot(snap => {
