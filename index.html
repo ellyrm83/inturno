@@ -166,6 +166,7 @@ a.wa{text-decoration:none;display:inline-flex;align-items:center;justify-content
 .impdot{display:block;width:6px;height:6px;border-radius:50%;background:#e86a92;margin:1px auto 0}
 .localbar{background:var(--sun);border-radius:14px;padding:8px 12px;font-size:12px;margin-bottom:12px;color:#5d4a10}
 .invcard{border:1.5px solid var(--line);border-radius:16px;padding:10px 12px;margin:8px 0;background:var(--card);color:var(--ink)}.invcard.new{border-color:var(--acc);box-shadow:0 0 0 3px var(--lav)}.invcode{font-family:ui-monospace,monospace;font-size:20px;font-weight:700;letter-spacing:2px;background:var(--lav);color:var(--ink);border-radius:10px;padding:4px 8px;white-space:nowrap}.invmsg{white-space:pre-wrap;font-size:13px;background:var(--bg);color:var(--ink);border-radius:12px;padding:8px 10px;margin-top:8px}
+.salpriv{background:var(--mint);border-radius:14px;padding:8px 12px;font-size:13px;margin:6px 0 10px}.salnav{display:flex;justify-content:space-between;align-items:center;margin:6px 0}.salnav b{text-transform:capitalize}.salbig{background:var(--lav);border-radius:18px;padding:12px 14px}.salnum{font-size:34px;font-weight:800;letter-spacing:-.5px;margin:2px 0 6px;font-variant-numeric:tabular-nums}.salbar{position:relative;height:12px;border-radius:8px;background:var(--card);overflow:visible}.salbar i{position:absolute;left:0;top:0;bottom:0;border-radius:8px;background:var(--acc)}.salbar u{position:absolute;top:-4px;bottom:-4px;width:3px;border-radius:2px;background:#e0a100}.salkpi{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;font-size:11px;color:var(--mut);text-align:center}.salkpi b{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}.salok{background:var(--mint);border-radius:12px;padding:8px 10px;margin-top:8px;font-size:14px}.salko{background:var(--hi);border-radius:12px;padding:8px 10px;margin-top:8px;font-size:14px}.salrows{display:flex;flex-direction:column;gap:4px}.salrow{border:1px solid var(--line);border-radius:12px;padding:6px 10px;background:var(--card)}.salrow summary{display:grid;grid-template-columns:70px 1fr auto;gap:6px;cursor:pointer;list-style:none;font-variant-numeric:tabular-nums}.salrow summary::-webkit-details-marker{display:none}.salrow .sd{text-transform:capitalize;font-weight:600}.salrow .sd.red{color:#d0566b}.saldet .sdr{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--line);font-size:14px}.saldet .sdr.tot{font-weight:800;border-bottom:none}.salov{margin-top:8px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
 .stat{background:var(--lav);border-radius:14px;padding:8px;text-align:center}.stat b{display:block;font-size:20px}.stat span{font-size:11px;color:var(--mut)}
 .cal{width:100%;border-collapse:separate;border-spacing:4px;table-layout:fixed}
@@ -256,6 +257,7 @@ h2{font-size:16px;margin:0 0 8px}
       <div class="tab" data-t="st">📋 Statini</div>
       <div class="tab" data-t="cc">👥 Gruppi</div>
       <div class="tab" data-t="imp">📌 Impegni</div>
+      <div class="tab" data-t="sal">💰 Stipendio</div>
     </div>
 
     <!-- TURNI SINGOLI -->
@@ -288,6 +290,9 @@ h2{font-size:16px;margin:0 0 8px}
       <div id="s3" class="sug hidden"></div>
       <div id="sim"></div>
     </section>
+
+    <!-- STIPENDIO -->
+    <section id="t-sal" class="card hidden"><div id="sal"></div></section>
 
     <!-- IMPEGNI -->
     <section id="t-imp" class="card hidden"><div id="imp"></div></section>
@@ -910,9 +915,9 @@ function renderSim() {
 // ---------- tabs ----------
 function showTab(t) {
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t));
-  ["ag", "me", "cmp", "sim", "st", "cc", "imp"].forEach(k => $("t-" + k).classList.toggle("hidden", k !== t));
+  ["ag", "me", "cmp", "sim", "st", "cc", "imp", "sal"].forEach(k => { const el = $("t-" + k); if (el) el.classList.toggle("hidden", k !== t); });
 }
-document.querySelectorAll(".tab").forEach(x => x.onclick = () => { showTab(x.dataset.t); if (x.dataset.t === "sim") renderSim(); if (x.dataset.t === "cc") renderCC(); if (x.dataset.t === "ag") renderAg(); if (x.dataset.t === "imp") renderImp(); });
+document.querySelectorAll(".tab").forEach(x => x.onclick = () => { showTab(x.dataset.t); if (x.dataset.t === "sim") renderSim(); if (x.dataset.t === "cc") renderCC(); if (x.dataset.t === "ag") renderAg(); if (x.dataset.t === "imp") renderImp(); if (x.dataset.t === "sal") renderSal(); });
 
 function renderAll() {
   renderMonths(); if (typeof renderProf === "function" && !P.editing) renderProf();
@@ -1001,7 +1006,7 @@ function openOv(m, name, i, keep) {
       ${draft.tipo === "cambio" ? `<div class="fgrid"><div class="full"><label>Nuovo turno: un codice (F23, R1, FER) oppure un orario (08:00-14:00)</label><input id="ovc" value="${esc(draft.codice || "")}" placeholder="F23 oppure 08:00-14:00" autocapitalize="characters" autocomplete="off"></div></div><div class="muted" id="ovprev"></div>` : ""}
       ${draft.tipo === "permesso" ? `<div class="fgrid"><div><label>Ore di permesso</label><input id="ovo" inputmode="decimal" value="${esc(draft.ore || "")}" placeholder="1"></div><div><label>Quando</label><select id="ovw" style="width:100%"><option value="fine" ${draft.dove !== "inizio" ? "selected" : ""}>Esco prima</option><option value="inizio" ${draft.dove === "inizio" ? "selected" : ""}>Entro dopo</option></select></div></div><div class="muted" id="ovprev"></div>` : ""}
       ${draft.tipo === "variazione" ? `<div class="fgrid"><div><label>Inizio</label><input type="time" id="ovi" value="${esc(draft.inizio || "")}"></div><div><label>Fine</label><input type="time" id="ovf" value="${esc(draft.fine || "")}"></div></div><div class="muted" id="ovprev"></div>` : ""}
-      <div class="fgrid"><div class="full"><label>Nota (es. con chi hai cambiato)</label><input id="ovn" value="${esc(draft.nota || "")}"></div></div>
+      ${typeof salOvHtml === "function" ? salOvHtml(m, name, i) : ""}<div class="fgrid"><div class="full"><label>Nota (es. con chi hai cambiato, protocollo del certificato)</label><input id="ovn" value="${esc(draft.nota || "")}"></div></div>
       <div class="stbtn" style="margin-top:10px"><button class="btn" id="ovsave">Salva</button>${cur ? `<button class="btn ghost" id="ovdel">Ripristina originale</button>` : ""}<button class="btn ghost" id="ovx">Chiudi</button></div></div>`;
     box.querySelectorAll("[data-t]").forEach(c => c.onclick = () => { draft.tipo = c.dataset.t; draw(); });
     const prev = () => { const p = $("ovprev"); if (!p) return; const r = applyOv(orig, draft);
@@ -1014,6 +1019,7 @@ function openOv(m, name, i, keep) {
     if ($("ovi")) $("ovi").oninput = e => { draft.inizio = e.target.value; prev(); };
     if ($("ovf")) $("ovf").oninput = e => { draft.fine = e.target.value; prev(); };
     $("ovn").oninput = e => { draft.nota = e.target.value; };
+    if (typeof salOvBind === "function") salOvBind(m, name, i);
     prev();
     $("ovsave").onclick = async () => {
       if (draft.tipo === "cambio" && !draft.codice) { $("ovc").focus(); return; }
@@ -2427,6 +2433,192 @@ function wizardNext() {
 S.touched = false; document.addEventListener("pointerdown", () => { S.touched = true; }, { capture: true, once: true });
 const needWizard = () => { try { return !SET.onboarded && !localStorage.getItem("turni.onboarded"); } catch (e) { return false; } };
 { let wt = 0; const wtry = () => { wt++; if (document.body.classList.contains("locked") || S.previewing) { if (wt < 600) setTimeout(wtry, 1000); return; } if (needWizard() && !S.touched && !(window.W && W)) openWizard(); else renderProf(); }; setTimeout(wtry, 1800); }
+
+
+// ================= STIPENDIO (solo su questo dispositivo) =================
+// I dati della busta paga NON vengono mai salvati online né condivisi: restano nel browser di questo telefono.
+const SALK = () => { let u = ""; try { u = ST.uid || ""; } catch (e) {} return "inturno.stip." + (u || "locale"); };
+const SAL_DEF = () => ({ cfg: { on: false, mode: "semplice", fisso: "", pagaOra: "", percStr: 30, percAll: 30, percNott: "", percDom: "", percFest: "", percNottDom: "", percNottFest: "", ind1: "", ind1n: "Indennità turno", ind2: "", ind2n: "Altra indennità", buonoVal: "", nettoPerc: 72, inps: 9.19, sost: 15, fondoBase: "", fondoPerc: "", detr: "", addiz: "", l207: "", tratt: [], posticipo: false, patrono: "", pin: "" }, mesi: {} });
+let SALLIVE = null, SAL = SAL_DEF(), SALT = false, SALU = false, SALM = null, SALKEY = "";
+function salLoad() { if (SALKEY === SALK()) return; SALKEY = SALK(); SAL = SAL_DEF(); try { const o = JSON.parse(localStorage.getItem(SALK()) || "null"); if (o) { SAL.cfg = Object.assign(SAL.cfg, o.cfg || {}); SAL.mesi = o.mesi || {}; } } catch (e) {} }
+let salTm = null; function salSave() { clearTimeout(salTm); const k = SALKEY || SALK(); salTm = setTimeout(() => { try { localStorage.setItem(k, JSON.stringify(SAL)); } catch (e) {} }, 300); }
+const nz = v => { const x = parseFloat(String(v == null ? "" : v).replace(",", ".")); return isFinite(x) ? x : 0; };
+const eur = v => (Math.round(v * 100) / 100).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+const eur0 = v => Math.round(v).toLocaleString("it-IT") + " €";
+const hfx = v => (Math.round(v * 100) / 100).toString().replace(".", ",");
+// festività italiane (Pasqua e Pasquetta comprese) + patrono facoltativo
+function pasqua(y) { const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451), mo = Math.floor((h + l - 7 * m + 114) / 31), da = ((h + l - 7 * m + 114) % 31) + 1; return new Date(y, mo - 1, da); }
+function festivo(dt) {
+  const d = dt.getDate(), mo = dt.getMonth() + 1, y = dt.getFullYear(), k = d + "/" + mo;
+  if (["1/1", "6/1", "25/4", "1/5", "2/6", "15/8", "1/11", "8/12", "25/12", "26/12"].includes(k)) return true;
+  const p = pasqua(y), pm = new Date(y, p.getMonth(), p.getDate() + 1);
+  if ((d === p.getDate() && mo === p.getMonth() + 1) || (d === pm.getDate() && mo === pm.getMonth() + 1)) return true;
+  const pt = String(SAL.cfg.patrono || "").match(/^(\d{1,2})\s*[\/.-]\s*(\d{1,2})$/); if (pt && +pt[1] === d && +pt[2] === mo) return true;
+  return false;
+}
+// calcolo del mese
+function salMese(m, opt) {
+  const C = SAL.cfg, name = m && P.name ? findIn(m, P.name) : null; if (!m || !name || !m.month) return null;
+  const cs = codesOf(m, name), M = SAL.mesi[m.key] || {}, ex = M.extra || {};
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const po = nz(C.pagaOra), PC = k => nz(C[k]) / 100;
+  const R = { giorni: 0, ore: 0, nott: 0, dom: 0, fest: 0, buoni: 0, str: 0, all: 0, magg: 0, ind: 0, vStr: 0, vAll: 0, rows: [] };
+  cs.forEach((c, i) => {
+    const dt = new Date(m.year, m.month - 1, i + 1); if (opt && opt.fino && dt > opt.fino) return;
+    const e = ex[i + 1] || {}, str = opt && opt.noExtra ? 0 : nz(e.str), all = opt && opt.noExtra ? 0 : nz(e.all);
+    const row = { i, dt, c, str, all, nott: 0, dom: 0, fest: 0, buono: false };
+    if (c && c.kind === "lavoro") {
+      R.giorni++; R.ore += c.hours;
+      // ora per ora (a quarti d'ora): notturno, domenica, festivo — i minuti dopo mezzanotte valgono per il giorno dopo
+      const nDa = tHm(SET.nDa || "20:00"), nA = tHm(SET.nA || "08:00");
+      for (let t = c.start; t < c.end - 1e-6; t += 0.25) {
+        const q = Math.min(0.25, c.end - t), hh = t % 24, day = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + Math.floor(t / 24));
+        const night = nDa > nA ? (hh >= nDa || hh < nA) : (hh >= nDa && hh < nA), sun = day.getDay() === 0, hol = festivo(day);
+        let pc = 0;
+        if (night && hol) pc = C.percNottFest !== "" ? PC("percNottFest") : PC("percNott") + PC("percFest");
+        else if (night && sun) pc = C.percNottDom !== "" ? PC("percNottDom") : PC("percNott") + PC("percDom");
+        else if (night) pc = PC("percNott"); else if (hol) pc = PC("percFest"); else if (sun) pc = PC("percDom");
+        const v = q * po * pc; R.magg += v;
+        if (night) row.nott += q; if (sun) row.dom += q; if (hol) row.fest += q;
+      }
+      R.nott += row.nott; R.dom += row.dom; R.fest += row.fest;
+      R.ind += nz(C.ind1) + nz(C.ind2);
+      if (c.hours >= nz(SET.buonoOre || 6)) { row.buono = true; R.buoni++; }
+    }
+    R.str += str; R.all += all; R.vStr += str * po * (1 + PC("percStr")); R.vAll += all * po * (1 + PC("percAll"));
+    R.rows.push(row);
+  });
+  const varTot = R.magg + R.ind + R.vStr + R.vAll + nz(M.altreComp);
+  const dim = new Date(m.year, m.month, 0).getDate(), frac = opt && opt.fino ? Math.max(0, Math.min(1, (opt.fino < new Date(m.year, m.month - 1, 1) ? 0 : opt.fino >= new Date(m.year, m.month, 0, 23, 59) ? dim : opt.fino.getDate()) / dim)) : 1;
+  const lordo = nz(C.fisso) * frac + varTot;
+  let netto, D = null;
+  if (C.mode === "dettagliato") {
+    const inps = Math.round(lordo) * PC("inps"), fondo = nz(C.fondoBase) * PC("fondoPerc");
+    const sostBase = (R.magg + nz(C.ind1) * R.giorni) * (1 - PC("inps")), sost = sostBase * PC("sost");
+    const imp = Math.max(0, lordo - inps - fondo - sostBase), s1 = 28000 / 12, s2 = 50000 / 12;
+    let irpef = Math.min(imp, s1) * 0.23 + Math.max(0, Math.min(imp, s2) - s1) * 0.33 + Math.max(0, imp - s2) * 0.43; irpef = Math.max(0, irpef - nz(C.detr));
+    const addiz = m.month === 12 ? 0 : nz(C.addiz), tratt = (C.tratt || []).reduce((a, t) => a + nz(t.v), 0), l207 = imp * PC("l207");
+    netto = lordo - inps - fondo - sost - irpef - addiz - tratt - nz(M.altreTratt) + l207;
+    D = { inps, fondo, sost, irpef, addiz, tratt, l207, imp };
+  } else netto = lordo * (nz(C.nettoPerc) || 72) / 100 - nz(M.altreTratt);
+  return Object.assign(R, { lordo, netto, varTot, D, buoniVal: R.buoni * nz(C.buonoVal), name });
+}
+function salMonths() { return S.months.filter(m => m.month && P.name && findIn(m, P.name) && !m.predicted); }
+// ---------- PIN facoltativo ----------
+async function sha(t) { try { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("inturno:" + t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join(""); } catch (e) { return "x" + t; } }
+// ---------- scheda ----------
+function renderSal() {
+  const out = $("sal"); if (!out) return; salLoad();
+  const C = SAL.cfg;
+  if (C.pin && !SALU) {
+    out.innerHTML = `<h2>💰 Stipendio</h2><p class="muted">🔒 Protetto da PIN.</p><div class="row" style="gap:6px"><input id="salpin" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" style="flex:1"><button class="btn" id="salpok">Apri</button></div><p class="err" id="salperr"></p>`;
+    $("salpok").onclick = async () => { if (await sha($("salpin").value) === C.pin) { SALU = true; renderSal(); } else $("salperr").textContent = "PIN non corretto."; };
+    return;
+  }
+  const lock = `<div class="salpriv">🔒 <b>Privato:</b> i dati della busta paga restano <b>solo su questo telefono</b>. Non vengono salvati online, non arrivano ai gruppi e non li vede nessuno, nemmeno chi gestisce l'app.</div>`;
+  if (!C.on) {
+    out.innerHTML = `<h2>💰 Stipendio</h2>${lock}<p>Inserisci i dati della tua busta paga: con la griglia dei turni l'app ti dice <b>quanto prenderai</b> se il mese va come scritto, e il contatore cresce con straordinari e allunghi. Puoi darti un <b>obiettivo</b> e sapere quando puoi dire no agli straordinari.</p>
+      <div class="stbtn"><button class="btn" id="salon">Imposta i dati della busta paga</button></div>`;
+    $("salon").onclick = () => { C.on = true; salSave(); renderSal(); setTimeout(() => { const d = $("salcfg"); if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth" }); } }, 50); };
+    return;
+  }
+  const ms = salMonths();
+  if (!SALM || !ms.some(m => m.key === SALM)) { const t = new Date(), k = String(t.getFullYear()) + String(t.getMonth() + 1).padStart(2, "0"); SALM = (ms.find(m => m.key === k) || ms[ms.length - 1] || {}).key || null; }
+  const m = ms.find(x => x.key === SALM);
+  let h = `<h2>💰 Stipendio</h2>${lock}`;
+  if (!m) h += `<p class="muted">Carica la griglia dei turni (o impostali a mano) con il tuo nome nel profilo: il calcolo parte dai turni.</p>`;
+  else {
+    const idx = ms.indexOf(m), MM = SAL.mesi[m.key] = SAL.mesi[m.key] || {};
+    const today = new Date(); today.setHours(23, 59, 59, 0);
+    const prev = salMese(m, { noExtra: true }), all = salMese(m), fino = salMese(m, { fino: today });
+    const busta = C.posticipo ? MESI_L[m.month % 12] + (m.month === 12 ? " " + (m.year + 1) : "") : MESI_L[m.month - 1];
+    const ob = nz(MM.obiettivo), tgt = ob || all.netto, pct = v => Math.max(0, Math.min(100, tgt ? v / Math.max(tgt, all.netto) * 100 : 0));
+    let obTxt = "";
+    if (ob) { if (all.netto >= ob) obTxt = `<div class="salok">🎉 Obiettivo raggiunto: ${eur0(all.netto)} su ${eur0(ob)}. Gli straordinari ora puoi rifiutarli.</div>`;
+      else { const r = all.lordo ? all.netto / all.lordo : 0.72, perH = nz(C.pagaOra) * (1 + nz(C.percStr) / 100) * r; obTxt = `<div class="salko">Ti mancano <b>${eur0(ob - all.netto)}</b> netti${perH > 0 ? ` ≈ <b>${hfx(Math.ceil((ob - all.netto) / perH * 2) / 2)} h</b> di straordinario` : ""}.</div>`; } }
+    h += `<div class="salnav"><button class="mini" id="salp" ${idx <= 0 ? "disabled" : ""}>◀</button><b>${esc(MESI_L[m.month - 1])} ${m.year}</b><button class="mini" id="saln" ${idx >= ms.length - 1 ? "disabled" : ""}>▶</button></div>
+      <div class="salbig"><span class="muted">Busta di ${esc(busta)} · netto stimato</span><div class="salnum" id="salnet">${eur0(all.netto)}</div>
+        <div class="salbar"><i style="width:${pct(fino.netto)}%"></i>${ob ? `<u style="left:${pct(ob)}%"></u>` : ""}</div>
+        <div class="salkpi"><span><b id="salk1">${eur0(prev.netto)}</b><br>previsto dalla griglia</span><span><b id="salk2">${eur0(fino.netto)}</b><br>maturato a oggi</span><span><b id="salk3">${eur0(all.netto)}</b><br>con gli extra</span></div>
+        <div class="muted" style="font-size:13px;margin-top:6px" id="salbuo">🍽️ ${all.buoni} buoni pasto${nz(C.buonoVal) ? " = " + eur(all.buoniVal) : ""} · ${all.giorni} giorni · ${hfx(all.ore)} h · 🌙 ${hfx(all.nott)} h notturne${all.str ? " · ⏱ " + hfx(all.str) + " h straord." : ""}${all.all ? " · ➕ " + hfx(all.all) + " h allungo" : ""}</div>
+        <div id="salobt">${obTxt}</div>
+        <div class="fgrid" style="margin-top:8px"><div><label>🎯 Obiettivo netto del mese</label><input id="salob" inputmode="decimal" value="${esc(MM.obiettivo || "")}" placeholder="es. 1900"></div><div><label>Netto vero della busta</label><input id="salreal" inputmode="decimal" value="${esc(MM.nettoReale || "")}" placeholder="a fine mese"></div></div>
+        ${nz(MM.nettoReale) ? `<p class="muted" style="font-size:13px">Differenza con la stima: <b>${(nz(MM.nettoReale) - all.netto >= 0 ? "+" : "") + eur(nz(MM.nettoReale) - all.netto)}</b>${C.mode !== "dettagliato" && all.lordo ? ` · la tua percentuale netta reale è circa ${Math.round(nz(MM.nettoReale) / all.lordo * 100)}%` : ""}</p>` : ""}
+      </div>
+      <div class="sec">Giorni di lavoro · tocca per aggiungere straordinario o allungo</div><div class="salrows">${all.rows.filter(r => (r.c && r.c.kind === "lavoro") || r.str || r.all).map(r => {
+        const wd = r.dt.toLocaleDateString("it-IT", { weekday: "short", day: "numeric" });
+        return `<details class="salrow" ${r.str || r.all ? "open" : ""}><summary><span class="sd ${r.dt.getDay() === 0 || festivo(r.dt) ? "red" : ""}">${esc(wd)}</span><span>${r.c && r.c.kind === "lavoro" ? hhmm(r.c.start) + "–" + hhmm(r.c.end) : "—"}</span><span class="muted">${r.nott ? "🌙" + hfx(r.nott) + " " : ""}${r.buono ? "🍽️" : ""}${r.str ? " ⏱" + hfx(r.str) : ""}${r.all ? " ➕" + hfx(r.all) : ""}</span></summary>
+          <div class="fgrid"><div><label>Ore di straordinario</label><input data-sx="${r.i + 1}" data-f="str" inputmode="decimal" value="${esc((MM.extra || {})[r.i + 1] && MM.extra[r.i + 1].str || "")}" placeholder="0"></div><div><label>Ore di allungo</label><input data-sx="${r.i + 1}" data-f="all" inputmode="decimal" value="${esc((MM.extra || {})[r.i + 1] && MM.extra[r.i + 1].all || "")}" placeholder="0"></div></div></details>`; }).join("")}</div>
+      <details class="more"><summary>📄 Dettaglio delle voci</summary><div class="saldet">${salDet(all, MM)}</div>
+        <div class="fgrid"><div><label>Altre competenze del mese</label><input data-mm="altreComp" inputmode="decimal" value="${esc(MM.altreComp || "")}" placeholder="0"></div><div><label>Altre trattenute del mese</label><input data-mm="altreTratt" inputmode="decimal" value="${esc(MM.altreTratt || "")}" placeholder="0"></div></div></details>`;
+  }
+  h += `<details class="more" id="salcfg"><summary>⚙️ Dati della busta paga</summary>${salCfgHtml()}</details>
+    <details class="more"><summary>🔐 PIN e copia di sicurezza</summary>
+      <p class="muted" style="font-size:13px">Il PIN serve se qualcuno prende in mano il tuo telefono. La copia è un file che tieni tu: serve per passare a un altro telefono.</p>
+      <div class="row" style="gap:6px;flex-wrap:wrap"><input id="salnp" type="password" inputmode="numeric" maxlength="8" placeholder="${C.pin ? "Nuovo PIN (vuoto = togli)" : "Imposta un PIN"}" style="flex:1;min-width:140px"><button class="mini" id="salnpok">${C.pin ? "Cambia" : "Salva PIN"}</button></div>
+      <div class="stbtn" style="margin-top:8px"><button class="mini" id="salexp">⬇ Scarica copia</button><label class="mini" style="cursor:pointer">⬆ Ripristina copia<input type="file" id="salimp" accept=".json,application/json" hidden></label></div><p class="muted" id="salmsg" style="font-size:12px"></p></details>`;
+  out.innerHTML = h;
+  // eventi
+  if ($("salp")) { $("salp").onclick = () => { SALM = ms[ms.indexOf(m) - 1].key; renderSal(); }; $("saln").onclick = () => { SALM = ms[ms.indexOf(m) + 1].key; renderSal(); }; }
+  const live = SALLIVE = !m ? null : () => { const a = salMese(m), f = salMese(m, { fino: (() => { const t = new Date(); t.setHours(23, 59, 59, 0); return t; })() }); $("salnet").textContent = eur0(a.netto); $("salk1").textContent = eur0(salMese(m, { noExtra: true }).netto); $("salk2").textContent = eur0(f.netto); $("salk3").textContent = eur0(a.netto);
+    $("salbuo").textContent = `🍽️ ${a.buoni} buoni pasto${nz(SAL.cfg.buonoVal) ? " = " + eur(a.buoniVal) : ""} · ${a.giorni} giorni · ${hfx(a.ore)} h · 🌙 ${hfx(a.nott)} h notturne${a.str ? " · ⏱ " + hfx(a.str) + " h straord." : ""}${a.all ? " · ➕ " + hfx(a.all) + " h allungo" : ""}`; };
+  out.querySelectorAll("input").forEach(i => { i.addEventListener("focus", () => SALT = true); i.addEventListener("blur", () => { SALT = false; }); });
+  out.querySelectorAll("[data-sx]").forEach(i => i.oninput = () => { const MM = SAL.mesi[m.key]; MM.extra = MM.extra || {}; const d = MM.extra[i.dataset.sx] = MM.extra[i.dataset.sx] || {}; d[i.dataset.f] = i.value.trim(); salSave(); live(); });
+  out.querySelectorAll("[data-mm]").forEach(i => i.oninput = () => { SAL.mesi[m.key][i.dataset.mm] = i.value.trim(); salSave(); live(); });
+  if ($("salob")) { $("salob").onchange = () => { SAL.mesi[m.key].obiettivo = $("salob").value.trim(); salSave(); renderSal(); }; $("salreal").onchange = () => { SAL.mesi[m.key].nettoReale = $("salreal").value.trim(); salSave(); renderSal(); }; }
+  out.querySelectorAll("details.salrow").forEach(d => d.addEventListener("toggle", () => {}));
+  salCfgBind(out);
+  $("salnpok").onclick = async () => { const v = $("salnp").value.trim(); if (v && !/^\d{4,8}$/.test(v)) { $("salmsg").textContent = "Il PIN deve avere da 4 a 8 cifre."; return; } SAL.cfg.pin = v ? await sha(v) : ""; SALU = true; salSave(); $("salmsg").textContent = v ? "PIN salvato." : "PIN tolto."; $("salnp").value = ""; };
+  $("salexp").onclick = async () => { try { const CL = window.__inturno || window.claude; const dl = CL && await CL.use("downloads"); const data = JSON.stringify({ app: "InTurno", tipo: "stipendio", v: 1, dati: SAL }, null, 1); if (dl) await dl.save({ filename: "InTurno-stipendio.json", data }); $("salmsg").textContent = "Copia scaricata: conservala tu, contiene i tuoi dati di busta paga."; } catch (e) { $("salmsg").textContent = "Copia non riuscita."; } };
+  $("salimp").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const o = JSON.parse(await f.text()); if (!o || o.tipo !== "stipendio" || !o.dati) throw 0; SAL.cfg = Object.assign(SAL_DEF().cfg, o.dati.cfg || {}); SAL.mesi = o.dati.mesi || {}; localStorage.setItem(SALKEY || SALK(), JSON.stringify(SAL)); renderSal(); } catch (er) { $("salmsg").textContent = "Il file non è una copia di InTurno."; } };
+}
+function salDet(a, MM) {
+  const C = SAL.cfg, row = (l, v, neg) => v ? `<div class="sdr"><span>${l}</span><b>${neg ? "− " : ""}${eur(v)}</b></div>` : "";
+  let h = row("Retribuzione fissa", nz(C.fisso)) + row("Maggiorazioni notturno/domenica/festivi", a.magg) + row(esc(C.ind1n || "Indennità") + " + altre indennità giornaliere", a.ind) + row(`Straordinario (${hfx(a.str)} h)`, a.vStr) + row(`Allungo (${hfx(a.all)} h)`, a.vAll) + row("Altre competenze", nz(MM.altreComp));
+  h += `<div class="sdr tot"><span>Lordo</span><b>${eur(a.lordo)}</b></div>`;
+  if (a.D) h += row("INPS", a.D.inps, 1) + row("Fondo pensione", a.D.fondo, 1) + row("Imposta sostitutiva turni", a.D.sost, 1) + row("IRPEF (dopo detrazioni)", a.D.irpef, 1) + row("Addizionali", a.D.addiz, 1) + row("Trattenute fisse", a.D.tratt, 1) + row("Altre trattenute", nz(MM.altreTratt), 1) + row("Indennità L.207/2024", a.D.l207);
+  else h += `<div class="sdr"><span>Netto ≈ ${nz(C.nettoPerc) || 72}% del lordo</span><b></b></div>` + row("Altre trattenute", nz(MM.altreTratt), 1);
+  return h + `<div class="sdr tot"><span>Netto stimato</span><b>${eur(a.netto)}</b></div><p class="muted" style="font-size:12px">È una stima: per la busta vera fa fede il cedolino.</p>`;
+}
+function salCfgHtml() {
+  const C = SAL.cfg, f = (k, l, ph, cls) => `<div class="${cls || ""}"><label>${l}</label><input data-sc="${k}" inputmode="decimal" value="${esc(C[k] == null ? "" : C[k])}" placeholder="${ph || ""}"></div>`;
+  return `<div class="ovtypes" style="margin-top:6px"><span class="chip ${C.mode !== "dettagliato" ? "sel" : ""}" data-sm="semplice">Calcolo semplice</span><span class="chip ${C.mode === "dettagliato" ? "sel" : ""}" data-sm="dettagliato">Calcolo dettagliato</span></div>
+    <div class="fgrid">${f("fisso", "Retribuzione fissa mensile (lorda)", "es. 1650")}${f("pagaOra", "Paga oraria lorda", "es. 10,50")}
+      ${f("percStr", "Straordinario +%", "30")}${f("percAll", "Allungo / prolungamento +%", "30")}
+      ${f("percNott", "Notturno +%", "es. 25")}${f("percDom", "Domenica diurna +%", "es. 30")}
+      ${f("percFest", "Festivo diurno +%", "es. 50")}${f("percNottDom", "Notte di domenica +%", "somma")}
+      ${f("percNottFest", "Notte festiva +%", "somma")}${f("patrono", "Patrono (giorno/mese)", "29/6")}
+      ${f("ind1", esc(C.ind1n || "Indennità") + " € al giorno", "0")}${f("ind2", "Altra indennità € al giorno", "0")}
+      ${f("buonoVal", "Valore buono pasto €", "es. 7")}
+      ${C.mode !== "dettagliato" ? f("nettoPerc", "Netto ≈ % del lordo", "72") : ""}</div>
+    ${C.mode === "dettagliato" ? `<div class="sec">Trattenute</div><div class="fgrid">${f("inps", "INPS %", "9,19")}${f("sost", "Imposta sostitutiva turni %", "15")}${f("fondoBase", "Fondo pensione: base €", "")}${f("fondoPerc", "Fondo pensione %", "")}${f("detr", "Detrazioni IRPEF mensili €", "")}${f("addiz", "Addizionali mensili €", "")}${f("l207", "Indennità L.207/2024 %", "")}</div>
+      <div class="sec">Trattenute fisse</div>${(C.tratt || []).map((t, k) => `<div class="row" style="gap:6px;margin:4px 0"><input data-tn="${k}" value="${esc(t.n || "")}" placeholder="es. Sindacato" style="flex:2"><input data-tv="${k}" inputmode="decimal" value="${esc(t.v || "")}" placeholder="€" style="flex:1"><button class="mini" data-tx="${k}">✕</button></div>`).join("")}<button class="mini" id="saltadd">+ Trattenuta fissa</button>` : ""}
+    <label class="row" style="gap:8px;margin-top:8px"><input type="checkbox" id="salpost" ${C.posticipo ? "checked" : ""}> <span>Le maggiorazioni arrivano nella busta del mese dopo</span></label>
+    <p class="muted" style="font-size:12px">Fascia notturna e ore minime per il buono pasto si cambiano in ⚙️ Impostazioni (ora: ${esc(SET.nDa || "20:00")}–${esc(SET.nA || "08:00")}, buono da ${esc(String(SET.buonoOre || 6))} h).</p>`;
+}
+function salCfgBind(out) {
+  const C = SAL.cfg, upd = () => { salSave(); };
+  out.querySelectorAll("[data-sc]").forEach(i => i.oninput = () => { C[i.dataset.sc] = i.value.trim(); upd(); try { SALLIVE && SALLIVE(); } catch (e) {} });
+  out.querySelectorAll("[data-sm]").forEach(c => c.onclick = () => { C.mode = c.dataset.sm; upd(); renderSal(); $("salcfg").open = true; });
+  out.querySelectorAll("[data-tn]").forEach(i => i.oninput = () => { C.tratt[+i.dataset.tn].n = i.value; upd(); });
+  out.querySelectorAll("[data-tv]").forEach(i => i.oninput = () => { C.tratt[+i.dataset.tv].v = i.value.trim(); upd(); });
+  out.querySelectorAll("[data-tx]").forEach(b => b.onclick = () => { C.tratt.splice(+b.dataset.tx, 1); upd(); renderSal(); $("salcfg").open = true; });
+  if ($("saltadd")) $("saltadd").onclick = () => { C.tratt = C.tratt || []; C.tratt.push({ n: "", v: "" }); upd(); renderSal(); $("salcfg").open = true; };
+  $("salpost").onchange = e => { C.posticipo = e.target.checked; upd(); renderSal(); $("salcfg").open = true; };
+}
+// straordinario e allungo anche dalla finestra del giorno (solo per i propri turni)
+function salOvHtml(m, name, i) {
+  salLoad();
+  if (!SAL.cfg.on || !P.name || findIn(m, P.name) !== name) return "";
+  const e = ((SAL.mesi[m.key] || {}).extra || {})[i + 1] || {};
+  return `<div class="fgrid salov"><div><label>⏱ Ore di straordinario</label><input id="ovsx" inputmode="decimal" value="${esc(e.str || "")}" placeholder="0"></div><div><label>➕ Ore di allungo</label><input id="ovsa" inputmode="decimal" value="${esc(e.all || "")}" placeholder="0"></div></div><p class="muted" style="font-size:12px;margin:2px 0">💰 Restano solo su questo telefono e aggiornano il contatore dello stipendio.</p>`;
+}
+function salOvBind(m, name, i) {
+  if (!$("ovsx")) return;
+  const put = (f, v) => { const MM = SAL.mesi[m.key] = SAL.mesi[m.key] || {}; MM.extra = MM.extra || {}; const d = MM.extra[i + 1] = MM.extra[i + 1] || {}; d[f] = String(v).trim(); salSave(); };
+  $("ovsx").oninput = e => put("str", e.target.value); $("ovsa").oninput = e => put("all", e.target.value);
+}
+{ const _ra = renderAll; renderAll = function () { _ra.apply(this, arguments); try { if (!$("t-sal").classList.contains("hidden") && !SALT) renderSal(); } catch (e) {} }; }
 
 // ================= PROFILO + MEMORIA =================
 const P = { name: null, editing: false };
