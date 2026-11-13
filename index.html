@@ -2988,7 +2988,7 @@ document.querySelectorAll("#upkind [data-uk]").forEach(c => c.onclick = () => {
   if (k === "squadre") { $("uplab").textContent = "📷 Carica la tabella delle squadre"; $("uphint").textContent = "Foto o screenshot della tabella settimanale (squadre × lunedì…domenica): trovo la tua riga, ti chiedo la durata del turno e se ogni settimana si passa alla riga successiva."; }
   else { $("uplab").textContent = "Importa griglia"; $("uphint").textContent = "PDF, Excel, CSV, foto o scansione. Vedi sempre un'anteprima prima di salvare."; }
 });
-setTimeout(() => { let m = null; try { m = localStorage.getItem("turni.modo"); } catch (e) {} if (!m) m = ((S.sheets || []).length || (FIX || []).length) ? "uscite" : "turni"; setMode(m, false); }, 50);
+setTimeout(() => { let m = null; try { m = localStorage.getItem("turni.modo"); } catch (e) {} if (!m) m = (SET.tipo === "studente" || SET.tipo === "privato") ? "uscite" : "turni"; setMode(m, false); }, 50);
 // ================= STIPENDIO (solo su questo dispositivo) =================
 // I dati della busta paga NON vengono mai salvati online né condivisi: restano nel browser di questo telefono.
 const SALK = () => { let u = ""; try { u = ST.uid || ""; } catch (e) {} return "inturno.stip." + (u || "locale"); };
