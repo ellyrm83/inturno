@@ -1394,6 +1394,60 @@ async function ntfPanel() {
   draw(); box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+// ================= IMPORTA DAL LETTORE CLAUDE =================
+const LETTORE_URL = "https://claude.ai/artifact/BYJ9exfhsxCuuC5ApATHMr";
+function impPanel() {
+  const box = $("xpanel"); if (!box) return;
+  box.innerHTML = `<div class="ovbox"><b>📥 Importa dal Lettore Claude</b>
+    <p class="muted" style="font-size:13px">1. Apri il <a href="${LETTORE_URL}" target="_blank" rel="noopener">Lettore InTurno</a> su Claude (con il tuo account) e carica la busta paga o la griglia dei turni.<br>2. Tocca <b>Copia il codice</b>.<br>3. Torna qui e incollalo.</p>
+    <textarea id="impt" rows="4" style="width:100%;font-size:12px" placeholder="INTURNO1:{…}"></textarea>
+    <div class="stbtn"><button class="btn" id="impgo">Importa</button><button class="btn ghost" id="impx">Chiudi</button></div><div id="impout"></div></div>`;
+  $("impx").onclick = () => { box.innerHTML = ""; };
+  $("impgo").onclick = () => {
+    const t = $("impt").value.trim(), out = $("impout"); let d;
+    try { d = JSON.parse(t.replace(/^INTURNO1:/, "").slice(t.replace(/^INTURNO1:/, "").indexOf("{"))); } catch (e) { out.innerHTML = `<p class="err">Codice non valido: copialo di nuovo dal Lettore.</p>`; return; }
+    if (d.tipo === "busta") return impBusta(d, out);
+    if (d.tipo === "rotazione") { const all = (d.righe || []).map(r => ({ name: r.nome || "", codes: (r.codici || []).slice(0, 7).map(c => String(c || "").toUpperCase()) })); while (all.length && all[all.length - 1].codes.every(c => !c)) all.pop();
+      if (all.length < 1) { out.innerHTML = `<p class="err">Nessuna riga nel codice.</p>`; return; } all.forEach(r => { while (r.codes.length < 7) r.codes.push(""); });
+      box.innerHTML = `<div id="aiout"></div>`; openRotation(d.nome || P.name || "io", all, Math.max(0, Math.min(all.length - 1, (+d.riga || 1) - 1))); return; }
+    if (d.tipo === "turni") return impTurni(d, out);
+    out.innerHTML = `<p class="err">Tipo di codice sconosciuto.</p>`;
+  };
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function impBusta(d, out) {
+  salLoad(); const C = SAL.cfg, it = s => String(s).replace(".", ","); let n = 0;
+  for (const [k, v] of Object.entries(d.voci || {})) { if (v == null || v === "") continue; C[k] = typeof v === "number" ? it(v) : String(v); n++; }
+  C.voci = C.voci || []; for (const c of d.competenze || []) { if (!c || !c.n) continue; const x = { n: c.n, v: it(c.v), tipo: ["mese", "giorno", "ora"].includes(c.tipo) ? c.tipo : "mese", tass: ["normale", "sost", "esente"].includes(c.tass) ? c.tass : "normale" }; const k = C.voci.findIndex(y => (y.n || "").toUpperCase() === c.n.toUpperCase()); if (k >= 0) C.voci[k] = x; else C.voci.push(x); n++; }
+  C.tratt = C.tratt || []; for (const c of d.tratt || []) { if (!c || !c.n) continue; const x = { n: c.n, v: it(c.v), tipo: "fisso" }; const k = C.tratt.findIndex(y => (y.n || "").toUpperCase() === c.n.toUpperCase()); if (k >= 0) C.tratt[k] = x; else C.tratt.push(x); n++; }
+  if (!C.nettoPerc && d.netto && d.lordo && d.netto < d.lordo) C.nettoPerc = it(Math.round(d.netto / d.lordo * 1000) / 10);
+  C.on = true; salSave();
+  out.innerHTML = `<p class="muted">✓ Busta paga importata: ${n} voci. Le trovi in 💰 Stipendio → Dati della busta paga, dove puoi correggerle. I dati restano solo su questo telefono.</p>`;
+  try { renderAll(); } catch (e) {}
+}
+function impTurni(d, out) {
+  const g = d.giorni || {}, keys = Object.keys(g).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  if (!keys.length) { out.innerHTML = `<p class="err">Nessun giorno nel codice.</p>`; return; }
+  const nm = String(d.nome || P.name || "").toUpperCase(), opts = FIX.map((f, k) => [k, f]).filter(([k, f]) => f.seq && f.seq.length);
+  let best = -1, bs = 0; opts.forEach(([k, f]) => { const sc = typeof ocrNameScore === "function" ? ocrNameScore(nm, f.nome) : (f.nome === nm ? 1 : 0); if (sc > bs) { bs = sc; best = k; } });
+  out.innerHTML = `<p class="muted">Letti <b>${keys.length}</b> giorni di ${esc(nm)} (${esc(keys[0])} → ${esc(keys[keys.length - 1])}).</p>
+    <label>Metti questi turni su</label><select id="impto" style="width:100%">${opts.map(([k, f]) => `<option value="${k}" ${k === best ? "selected" : ""}>${esc(f.nome)} · ${esc(f.gruppo || "")} (sopra la rotazione)</option>`).join("")}${P.name && P.name.toUpperCase() !== nm ? `<option value="me" ${best < 0 ? "selected" : ""}>Io: ${esc(P.name.toUpperCase())}</option>` : ""}<option value="new">Nuova persona: ${esc(nm)}</option></select>
+    <div class="stbtn"><button class="btn" id="impok">Compila il calendario</button></div>`;
+  $("impok").onclick = async () => {
+    const C = SET.codici, rip = new Set((C.riposi || []).map(x => String(x).toUpperCase())), day = {};
+    for (const k of keys) { let v = String(g[k] || "").trim().toUpperCase(); if (!v || v === "?") continue; const c = toCode(v); day[k] = c || v; if (/^(RIP|GF|RIPOSO|R1|R2)$/.test(v)) rip.add(v); }
+    C.riposi = [...rip]; try { await saveSet(); } catch (e) {}
+    const sel = $("impto").value, Y = +keys[0].slice(0, 4); let f;
+    const NM = sel === "me" ? P.name.toUpperCase() : nm;
+    if (sel === "new" || sel === "me") { f = { nome: NM, gruppo: "TURNI IMPORTATI", mode: "ciclo", sett: [], seq: [{ t: "riposo" }], inizio: keys[0], soloGiorni: true, anno: { anno: Y, set: {}, day: {} } }; const k = FIX.findIndex(x => x.nome === NM && x.soloGiorni); if (k >= 0) { f = FIX[k]; f.anno = f.anno || { anno: Y, set: {}, day: {} }; } else FIX.push(f); }
+    else f = FIX[+sel];
+    f.anno = f.anno || {}; f.anno.day = Object.assign(f.anno.day || {}, day); f.anno.set = f.anno.set || {}; f.anno.anno = Math.min(f.anno.anno || Y, Y);
+    await saveFix(); S.year = Y; rebuildMonths(); renderAll();
+    $("xpanel").innerHTML = `<div class="ovbox"><p class="muted" style="margin:0">✓ Calendario compilato: ${Object.keys(day).length} giorni di ${esc(f.nome)}. Tocca un mese per vedere i turni.</p></div>`;
+    const mo = $("months"); if (mo) mo.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+}
+
 // ================= ORGANIZZA USCITA =================
 const OUT = {
   colazione: { what: "la colazione", label: "☕ Colazione", win: [7.5, 10.5], need: 1.5 },
@@ -1957,6 +2011,7 @@ function fixPos(f, mon) { // posizione (0..N-1, nell'ordine della sequenza) dell
 function fixCode(f, y, m, d) {
   const t = Date.UTC(y, m - 1, d), iso = _iso(t), A = f.anno || {};
   if (A.day && A.day[iso]) return A.day[iso];
+  if (f.soloGiorni) return "";
   const L = f.seq.length, N = fixWeeks(f); let x;
   if (N && (A.set && Object.keys(A.set).length)) { const wd = (new Date(t).getUTCDay() + 6) % 7; x = f.seq[fixPos(f, t - wd * 864e5) * 7 + wd]; }
   else { const dd = Math.round((t - _utc(f.inizio)) / 864e5); x = f.seq[((dd % L) + L) % L]; }
@@ -3419,9 +3474,9 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp">📥 Importa dal Lettore</button>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
-    $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel();
+    $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => impPanel();
     if ($("pout")) $("pout").onclick = () => window.__logout();
     return;
   }
