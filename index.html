@@ -86,6 +86,7 @@ body:not(.locked) #gate{display:none}
 .opt.swap{align-items:flex-start}.cands{margin-top:4px}.cand{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0}
 .aigrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
 .aigrid label{display:flex;flex-direction:column;font-size:11px;color:var(--mut)}
+.aigrid small{font-size:11px;color:var(--acc);min-height:14px;padding:2px 2px 0}.aigrid small.bad{color:#d0566b}
 .aigrid input{font:inherit;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px}
 .fxrow{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:6px;align-items:center;margin-top:4px}
 .fxrow input[type=time]{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px}
@@ -1677,16 +1678,18 @@ Valori di "v": "HH:MM-HH:MM" quando c'è o si può ricavare l'orario di inizio e
   };
   draw();
 }
+function codeHint(c) { try { const d = decode(c); if (d.kind === "lavoro") return hhmm(d.start) + "–" + hhmm(d.end); if (d.kind === "riposo") return "Riposo"; if (d.kind === "ferie") return "Ferie"; if (d.kind === "vuoto") return ""; if (d.kind === "ignoto") return "non letto ?"; return (d.label || c) + (["off", "assenza", "malattia"].includes(d.kind) ? "" : " ?"); } catch (e) { return ""; } }
 function showAIResult(res, miss, note, M, Y, group, file) {
   const out = $("aiout");
   if (!res.length) { out.innerHTML = `<p class="err">Non ho trovato ${esc(miss.join(", "))} nella griglia.</p>`; return; }
   const dim = new Date(Y, M, 0).getDate();
-  out.innerHTML = `<p class="muted">Ecco cosa ho letto per ${esc(MESI_L[M - 1])} ${Y}: controlla e correggi (formato 08:00-14:00, R riposo, FER ferie), poi salva.${miss.length ? ` Non trovate: ${esc(miss.join(", "))}.` : ""}${note ? `<br>Nota: ${esc(note)}` : ""}</p>` +
+  out.innerHTML = `<p class="muted">Ecco cosa ho letto per ${esc(MESI_L[M - 1])} ${Y}: controlla e correggi, poi salva. Puoi scrivere il codice (es. F30) o l'orario (08:00-14:00), R per riposo, FER per ferie: sotto ogni giorno vedi come lo leggo. Se la lettura è sbagliata cambia le regole in ⚙️ Impostazioni → Come si leggono i tuoi codici.${miss.length ? ` Non trovate: ${esc(miss.join(", "))}.` : ""}${note ? `<br>Nota: ${esc(note)}` : ""}</p>` +
     res.map((p, k) => `<div class="sec">${esc(p.nome)}</div><div class="aigrid">${p.codes.map((c, i) => {
       const wd = ["L","M","M","G","V","S","D"][(new Date(Y, M - 1, i + 1).getDay() + 6) % 7];
-      return `<label><span>${wd} ${i + 1}</span><input data-p="${k}" data-d="${i}" value="${esc(fromCode(c))}"></label>`; }).join("")}</div>`).join("") +
+      return `<label><span>${wd} ${i + 1}</span><input data-p="${k}" data-d="${i}" value="${esc(fromCode(c))}"><small class="aihint" data-h="${k}_${i}">${esc(codeHint(c))}</small></label>`; }).join("")}</div>`).join("") +
     `<div class="stbtn" style="margin-top:10px"><button class="btn" id="aisave">Salva in ${esc(group.sector)}</button></div>`;
-  out.querySelectorAll("input[data-p]").forEach(inp => inp.oninput = () => { res[+inp.dataset.p].codes[+inp.dataset.d] = toCode(inp.value); });
+  out.querySelectorAll("input[data-p]").forEach(inp => inp.oninput = () => { const c = toCode(inp.value); res[+inp.dataset.p].codes[+inp.dataset.d] = c; const h = out.querySelector(`[data-h="${inp.dataset.p}_${inp.dataset.d}"]`); if (h) { h.textContent = codeHint(c); h.classList.toggle("bad", /\?$/.test(h.textContent)); } });
+  out.querySelectorAll(".aihint").forEach(h => h.classList.toggle("bad", /\?$/.test(h.textContent)));
   $("aisave").onclick = () => {
     const key = "foglio_" + String(Y) + String(M).padStart(2, "0") + "_" + secSlug(group.sector);
     let sh = S.sheets.find(x => sheetKey(x) === key);
@@ -2305,7 +2308,7 @@ function codiciHtml(C) {
   return `<div class="ovtypes"><span class="chip ${C.formula !== false ? "sel" : ""}" data-cf="1">Formula (lettera e numero)</span><span class="chip ${C.formula === false ? "sel" : ""}" data-cf="0">Solo legenda / orari scritti</span></div>
     ${C.formula !== false ? `<div class="fgrid"><div class="full"><label>Lettera = ore di durata</label><input id="cxl" value="${esc(lettToStr(C.lettere))}" placeholder="D=4, E=5, F=6, H=8"></div>
       <div class="full"><label>Il numero diviso per … dà l'ora di inizio</label><input id="cxd" inputmode="decimal" value="${esc(String(C.div || 2))}"></div></div>
-      <p class="muted" style="font-size:12px">Esempio con questi valori: ${(() => { const L = C.lettere || {}; const k = Object.keys(L)[0]; if (!k) return "—"; const n = Math.round(15 * (+C.div || 2)); const st = n / (+C.div || 2); return `${k}${n} = ${hhmm(st)}–${hhmm(st + +L[k])}`; })()}</p>` : ""}
+      <p class="muted" style="font-size:12px">Esempio con questi valori: ${(() => { const L = C.lettere || {}; const k = L.F != null ? "F" : Object.keys(L)[0]; if (!k) return "—"; const n = Math.round(15 * (+C.div || 2)); const st = n / (+C.div || 2); return `${k}${n} = ${hhmm(st)}–${hhmm(st + +L[k])}`; })()}</p>` : ""}
     <div class="sec">Legenda dei codici (facoltativa)</div>
     ${(C.legenda || []).map((r, k) => `<div class="fxrow lgrow"><input data-lc="${k}" value="${esc(r.code || "")}" placeholder="M"><select data-lt="${k}">${["lavoro", "riposo", "ferie", "assenza"].map(t => `<option ${r.tipo === t ? "selected" : ""}>${t}</option>`).join("")}</select>${(r.tipo || "lavoro") === "lavoro" ? `<input type="time" data-li="${k}" value="${esc(r.i || "")}"><input type="time" data-lf="${k}" value="${esc(r.f || "")}">` : "<span></span><span></span>"}<button class="mini" data-lx="${k}">✕</button></div>`).join("")}
     <div class="stbtn" style="margin-top:6px"><button class="mini" id="cxadd">+ Aggiungi codice</button><button class="mini" id="cxmpn">Esempio M/P/N</button></div>
@@ -2364,7 +2367,7 @@ const PROFILI = [
 ];
 let W = null;
 function openWizard() {
-  W = { step: 0, nome: P.name || "", tipo: null, cod: JSON.parse(JSON.stringify(SET.codici)), rot: SET.rot.mode || "pax14", notturno: SET.notturno, nDa: SET.nDa, nA: SET.nA, buoni: SET.buoni, buonoOre: SET.buonoOre, statini: SET.statini, us: JSON.parse(JSON.stringify(SET.uscite)), marg: SET.margine };
+  W = { step: 0, nome: P.name || "", tipo: SET.tipo || null, az: SET.azienda || "", rep: SET.reparto || "", cod: JSON.parse(JSON.stringify(SET.codici)), rot: SET.rot.mode || "pax14", notturno: SET.notturno, nDa: SET.nDa, nA: SET.nA, buoni: SET.buoni, buonoOre: SET.buonoOre, statini: SET.statini, us: JSON.parse(JSON.stringify(SET.uscite)), marg: SET.margine };
   drawWizard();
 }
 function drawWizard() {
@@ -2374,8 +2377,8 @@ function drawWizard() {
   let h = `<div class="wizbox">${dots}`;
   if (W.step === 0) h += `<div class="empty">${PEOPLE_SVG}</div><h2>Benvenuta in InTurno 👋</h2><p class="muted">Ti faccio qualche domanda per impostare l'app sul tuo modo di lavorare e di vivere. Puoi cambiare tutto dopo.</p>
     <div class="fgrid"><div class="full"><label>Come ti chiami? (come compare nei turni, se li hai)</label><input id="wn" value="${esc(W.nome)}" placeholder="es. Rossi Maria" autocomplete="name"></div></div>`;
-  if (W.step === 1) h += `<h2>Che lavoro fai?</h2><p class="muted">Scegli quello che ti somiglia di più.</p><div class="wcards">${PROFILI.map(p => `<div class="wcard ${W.tipo === p.k ? "on" : ""}" data-wt="${p.k}"><span class="wico">${p.ico}</span><b>${p.t}</b><span class="muted">${p.d}</span></div>`).join("")}</div>`;
-  if (W.step === 2 && W.tipo === "griglia") h += `<h2>Come si leggono i tuoi codici?</h2><p class="muted">Così l'app trasforma ogni codice nel suo orario. Se usi la regola dell'aeroporto lascia tutto com'è (F30 = 15:00–21:00).</p>
+  if (W.step === 1) h += `<h2>Che lavoro fai?</h2><p class="muted">Scegli quello che ti somiglia di più.</p><div class="wcards">${PROFILI.map(p => `<div class="wcard ${W.tipo === p.k ? "on" : ""}" data-wt="${p.k}"><span class="wico">${p.ico}</span><b>${p.t}</b><span class="muted">${p.d}</span></div>`).join("")}</div>${["griglia", "ciclo", "fisso"].includes(W.tipo) ? `<div class="fgrid" style="margin-top:10px"><div><label>Azienda (facoltativo)</label><input id="waz" value="${esc(W.az || "")}" placeholder="es. la tua società"></div><div><label>Reparto / settore</label><input id="wrep" value="${esc(W.rep || "")}" placeholder="es. Check-in, Operation"></div></div><p class="muted" style="font-size:12px">Restano solo nel tuo profilo: servono a ricordare le regole della tua azienda. Ogni società ha le sue, e al passo dopo le imposti.</p>` : ""}`;
+  if (W.step === 2 && W.tipo === "griglia") h += `<h2>Come si leggono i tuoi codici${W.az ? " in " + esc(W.az) : ""}?</h2><p class="muted">Ogni azienda scrive i turni a modo suo: dimmi la regola e l'app trasformerà ogni codice nel suo orario.<br>• <b>Formula</b>: la lettera indica le ore di lavoro e il numero diviso 2 l'ora di inizio (F30 = 6 ore dalle 15:00 → 15:00–21:00). Puoi cambiare lettere e divisore.<br>• <b>Legenda</b>: ogni codice ha il suo orario (M = 06:00–14:00…) oppure gli orari sono già scritti.</p>
     <div id="wcod">${codiciHtml(W.cod)}</div>
     <div class="sec">I tuoi riposi seguono una rotazione?</div><div class="ovtypes"><span class="chip ${W.rot === "pax14" ? "sel" : ""}" data-wr="pax14">Sì, 14 settimane (PAX NEW)</span><span class="chip ${W.rot === "sett" ? "sel" : ""}" data-wr="sett">Sì, un'altra (la imposto dopo)</span><span class="chip ${W.rot === "no" ? "sel" : ""}" data-wr="no">No</span></div>`;
   const s3 = W.tipo === "griglia" ? 3 : 2;
@@ -2394,7 +2397,7 @@ function drawWizard() {
   h += `<div class="stbtn wnav">${W.step > 0 && !last ? `<button class="btn ghost" id="wback">Indietro</button>` : ""}${!last ? `<button class="btn" id="wnext" ${W.step === 1 && !W.tipo ? "disabled" : ""}>Avanti</button>` : ""}${W.step === 0 ? `<button class="mini" id="wskip">Salta</button>` : ""}</div><p id="werr" class="err"></p></div>`;
   box.innerHTML = h; box.scrollTop = 0;
   let colC = null; if ($("wcod")) { const redraw = () => { colC && colC(); drawWizard(); }; colC = bindCodici($("wcod"), W.cod, redraw); }
-  const collect = () => { if ($("wn")) W.nome = $("wn").value.trim(); if (colC) colC(); if ($("wnot")) { W.notturno = $("wnot").checked; W.nDa = $("wnda").value || "20:00"; W.nA = $("wna").value || "08:00"; W.buoni = $("wbuo").checked; W.buonoOre = parseFloat(String($("wbo").value).replace(",", ".")) || 6; W.statini = $("wsta").checked; }
+  const collect = () => { if ($("wn")) W.nome = $("wn").value.trim(); if ($("waz")) { W.az = $("waz").value.trim().slice(0, 60); W.rep = $("wrep").value.trim().slice(0, 60); } if (colC) colC(); if ($("wnot")) { W.notturno = $("wnot").checked; W.nDa = $("wnda").value || "20:00"; W.nA = $("wna").value || "08:00"; W.buoni = $("wbuo").checked; W.buonoOre = parseFloat(String($("wbo").value).replace(",", ".")) || 6; W.statini = $("wsta").checked; }
     if (box.querySelector("[data-ue]")) { collectUscite(box, W.us); W.marg = +$("usm").value; } };
   box.querySelectorAll("[data-wt]").forEach(c => c.onclick = () => { collect(); W.tipo = c.dataset.wt; if (W.tipo !== "griglia") { W.statini = false; } drawWizard(); });
   box.querySelectorAll("[data-wr]").forEach(c => c.onclick = () => { collect(); W.rot = c.dataset.wr; drawWizard(); });
@@ -2406,7 +2409,7 @@ function drawWizard() {
 async function finishWizard(skip) {
   if (!skip) {
     SET.codici = W.cod; SET.rot.mode = W.rot === "sett" ? "sett" : W.rot; SET.notturno = W.notturno && ["griglia", "ciclo", "fisso"].includes(W.tipo); SET.nDa = W.nDa; SET.nA = W.nA;
-    SET.buoni = W.buoni && ["griglia", "ciclo", "fisso"].includes(W.tipo); SET.buonoOre = W.buonoOre; SET.statini = W.statini && W.tipo === "griglia"; SET.uscite = W.us; SET.margine = W.marg; SET.tipo = W.tipo;
+    SET.buoni = W.buoni && ["griglia", "ciclo", "fisso"].includes(W.tipo); SET.buonoOre = W.buonoOre; SET.statini = W.statini && W.tipo === "griglia"; SET.uscite = W.us; SET.margine = W.marg; SET.tipo = W.tipo; SET.azienda = W.az || ""; SET.reparto = W.rep || "";
     if (W.nome) await setProfile(W.nome.toUpperCase());
     if (["libero", "studente", "privato"].includes(W.tipo) && P.name && !FIX.some(f => sameP(f.nome, P.name))) { FIX.push({ nome: P.name, gruppo: "MIEI IMPEGNI", mode: "libero", sett: [], seq: [], inizio: "" }); await saveFix(); }
   }
@@ -2422,8 +2425,8 @@ function wizardNext() {
   else { showTab("imp"); renderImp(); impDraft = Object.assign(IMPD(), t === "studente" ? { titolo: "Scuola", giorni: [0, 1, 2, 3, 4], fascia: "mattina" } : {}); impMode = "new"; drawImpForm(); }
 }
 S.touched = false; document.addEventListener("pointerdown", () => { S.touched = true; }, { capture: true, once: true });
-const needWizard = () => { try { return !SET.onboarded && !localStorage.getItem("turni.onboarded") && !S.sheets.length && !(FIX || []).length; } catch (e) { return false; } };
-setTimeout(() => { if (needWizard() && !S.touched && !S.previewing && !document.body.classList.contains("locked")) openWizard(); else renderProf(); }, 1800);
+const needWizard = () => { try { return !SET.onboarded && !localStorage.getItem("turni.onboarded"); } catch (e) { return false; } };
+{ let wt = 0; const wtry = () => { wt++; if (document.body.classList.contains("locked") || S.previewing) { if (wt < 600) setTimeout(wtry, 1000); return; } if (needWizard() && !S.touched && !(window.W && W)) openWizard(); else renderProf(); }; setTimeout(wtry, 1800); }
 
 // ================= PROFILO + MEMORIA =================
 const P = { name: null, editing: false };
