@@ -2438,7 +2438,7 @@ const needWizard = () => { try { return !SET.onboarded && !localStorage.getItem(
 // ================= STIPENDIO (solo su questo dispositivo) =================
 // I dati della busta paga NON vengono mai salvati online né condivisi: restano nel browser di questo telefono.
 const SALK = () => { let u = ""; try { u = ST.uid || ""; } catch (e) {} return "inturno.stip." + (u || "locale"); };
-const SAL_DEF = () => ({ cfg: { on: false, mode: "semplice", fisso: "", pagaOra: "", percStr: 30, percAll: 30, percNott: "", percDom: "", percFest: "", percNottDom: "", percNottFest: "", ind1: "", ind1n: "Indennità turno", ind2: "", ind2n: "Altra indennità", buonoVal: "", nettoPerc: 72, inps: 9.19, sost: 15, fondoBase: "", fondoPerc: "", detr: "", addiz: "", l207: "", tratt: [], posticipo: false, patrono: "", pin: "" }, mesi: {} });
+const SAL_DEF = () => ({ cfg: { on: false, mode: "semplice", livello: "", fisso: "", pagaOra: "", soglia: 8, percAll: 0, percStr: "", percStrNott: "", percStrFest: "", percNott: "", percDom: "", percFest: "", percNottDom: "", percNottFest: "", ind1: "", ind1n: "Indennità turno", ind2: "", ind2n: "Altra indennità", voci: [], buonoVal: "", nettoPerc: 72, inps: 9.19, sost: 15, fondoBase: "", fondoPerc: "", detr: "", addiz: "", l207: "", tratt: [], posticipo: false, patrono: "", pin: "" }, mesi: {} });
 let SALLIVE = null, SAL = SAL_DEF(), SALT = false, SALU = false, SALM = null, SALKEY = "";
 function salLoad() { if (SALKEY === SALK()) return; SALKEY = SALK(); SAL = SAL_DEF(); try { const o = JSON.parse(localStorage.getItem(SALK()) || "null"); if (o) { SAL.cfg = Object.assign(SAL.cfg, o.cfg || {}); SAL.mesi = o.mesi || {}; } } catch (e) {} }
 let salTm = null; function salSave() { clearTimeout(salTm); const k = SALKEY || SALK(); salTm = setTimeout(() => { try { localStorage.setItem(k, JSON.stringify(SAL)); } catch (e) {} }, 300); }
@@ -2457,51 +2457,73 @@ function festivo(dt) {
   return false;
 }
 // calcolo del mese
+const NIGHT = hh => { const nDa = tHm(SET.nDa || "20:00"), nA = tHm(SET.nA || "08:00"); return nDa > nA ? (hh >= nDa || hh < nA) : (hh >= nDa && hh < nA); };
+function salPct(C) { const PC = k => nz(C[k]) / 100, has = k => String(C[k] == null ? "" : C[k]).trim() !== "";
+  return { nott: PC("percNott"), dom: PC("percDom"), fest: PC("percFest"), nottDom: has("percNottDom") ? PC("percNottDom") : PC("percNott") + PC("percDom"), nottFest: has("percNottFest") ? PC("percNottFest") : PC("percNott") + PC("percFest"),
+    all: PC("percAll"), str: PC("percStr"), strNott: has("percStrNott") ? PC("percStrNott") : PC("percStr") + PC("percNott"), strFest: has("percStrFest") ? PC("percStrFest") : PC("percStr") + Math.max(PC("percFest"), PC("percDom")) }; }
+function maggOrd(p, night, sun, hol) { return night && hol ? p.nottFest : night && sun ? p.nottDom : night ? p.nott : hol ? p.fest : sun ? p.dom : 0; }
+// ore in più di un giorno: entro la soglia (es. 8 h) sono ordinarie (allungo), oltre sono straordinario
+function salExtra(e) { return { piu: nz(e.piu) || (nz(e.str) + nz(e.all)), dove: e.dove === "prima" ? "prima" : "dopo" }; }
 function salMese(m, opt) {
   const C = SAL.cfg, name = m && P.name ? findIn(m, P.name) : null; if (!m || !name || !m.month) return null;
+  opt = opt || {};
   const cs = codesOf(m, name), M = SAL.mesi[m.key] || {}, ex = M.extra || {};
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const po = nz(C.pagaOra), PC = k => nz(C[k]) / 100;
-  const R = { giorni: 0, ore: 0, nott: 0, dom: 0, fest: 0, buoni: 0, str: 0, all: 0, magg: 0, ind: 0, vStr: 0, vAll: 0, rows: [] };
+  const po = nz(C.pagaOra), p = salPct(C), soglia = nz(C.soglia) || 8;
+  const R = { giorni: 0, ore: 0, nott: 0, dom: 0, fest: 0, buoni: 0, mNott: 0, mDom: 0, mFest: 0, ordH: 0, ordNott: 0, vOrd: 0, strH: 0, strNott: 0, vStr: 0, ind: 0, sostInd: 0, dispOrd: 0, rows: [] };
   cs.forEach((c, i) => {
-    const dt = new Date(m.year, m.month - 1, i + 1); if (opt && opt.fino && dt > opt.fino) return;
-    const e = ex[i + 1] || {}, str = opt && opt.noExtra ? 0 : nz(e.str), all = opt && opt.noExtra ? 0 : nz(e.all);
-    const row = { i, dt, c, str, all, nott: 0, dom: 0, fest: 0, buono: false };
+    const dt = new Date(m.year, m.month - 1, i + 1); if (opt.fino && dt > opt.fino) return;
+    const X = opt.noExtra ? { piu: 0, dove: "dopo" } : salExtra(ex[i + 1] || {});
+    const row = { i, dt, c, piu: X.piu, dove: X.dove, ord: 0, str: 0, xNott: 0, nott: 0, dom: 0, fest: 0, buono: false };
+    const slot = (t, q, fn) => { const hh = ((t % 24) + 24) % 24, day = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + Math.floor(t / 24)); fn(q, NIGHT(hh), day.getDay() === 0, festivo(day)); };
     if (c && c.kind === "lavoro") {
-      R.giorni++; R.ore += c.hours;
-      // ora per ora (a quarti d'ora): notturno, domenica, festivo — i minuti dopo mezzanotte valgono per il giorno dopo
-      const nDa = tHm(SET.nDa || "20:00"), nA = tHm(SET.nA || "08:00");
-      for (let t = c.start; t < c.end - 1e-6; t += 0.25) {
-        const q = Math.min(0.25, c.end - t), hh = t % 24, day = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + Math.floor(t / 24));
-        const night = nDa > nA ? (hh >= nDa || hh < nA) : (hh >= nDa && hh < nA), sun = day.getDay() === 0, hol = festivo(day);
-        let pc = 0;
-        if (night && hol) pc = C.percNottFest !== "" ? PC("percNottFest") : PC("percNott") + PC("percFest");
-        else if (night && sun) pc = C.percNottDom !== "" ? PC("percNottDom") : PC("percNott") + PC("percDom");
-        else if (night) pc = PC("percNott"); else if (hol) pc = PC("percFest"); else if (sun) pc = PC("percDom");
-        const v = q * po * pc; R.magg += v;
-        if (night) row.nott += q; if (sun) row.dom += q; if (hol) row.fest += q;
-      }
+      R.giorni++; R.ore += c.hours; R.dispOrd += Math.max(0, soglia - c.hours);
+      for (let t = c.start; t < c.end - 1e-6; t += 0.25) slot(t, Math.min(0.25, c.end - t), (q, n, su, ho) => {
+        const v = q * po * maggOrd(p, n, su, ho); if (n) { row.nott += q; } if (su) row.dom += q; if (ho) row.fest += q;
+        if (ho) R.mFest += v; else if (su) R.mDom += v; else R.mNott += v; });
       R.nott += row.nott; R.dom += row.dom; R.fest += row.fest;
-      R.ind += nz(C.ind1) + nz(C.ind2);
+      R.ind += nz(C.ind1) + nz(C.ind2); R.sostInd += nz(C.ind1);
       if (c.hours >= nz(SET.buonoOre || 6)) { row.buono = true; R.buoni++; }
+      if (X.piu > 0) { // ore in più attaccate al turno: dopo la fine o prima dell'inizio
+        const t0 = X.dove === "prima" ? c.start - X.piu : c.end; let done = X.dove === "prima" ? 0 : c.hours;
+        const ordCap = Math.max(0, soglia - c.hours); let ordUsed = 0;
+        for (let t = t0; t < t0 + X.piu - 1e-6; t += 0.25) slot(t, Math.min(0.25, t0 + X.piu - t), (q, n, su, ho) => {
+          // prima del turno: le prime ore in più sono quelle più lontane; contiamo come ordinarie le ore fino a raggiungere la soglia
+          const isOrd = ordUsed + q <= ordCap + 1e-6; if (isOrd) ordUsed += q;
+          if (isOrd) { row.ord += q; R.ordH += q; R.vOrd += q * po * (1 + p.all + maggOrd(p, n, su, ho)); if (n) { R.ordNott += q; row.xNott += q; } }
+          else { const pc = n && (su || ho) ? Math.max(p.strNott, p.strFest) : n ? p.strNott : (su || ho) ? p.strFest : p.str; row.str += q; R.strH += q; R.vStr += q * po * (1 + pc); if (n) { R.strNott += q; row.xNott += q; } } });
+      }
+    } else if (X.piu > 0) { // ore in un giorno di riposo: tutto straordinario
+      const su = dt.getDay() === 0, ho = festivo(dt), pc = su || ho ? p.strFest : p.str; row.str = X.piu; R.strH += X.piu; R.vStr += X.piu * po * (1 + pc);
     }
-    R.str += str; R.all += all; R.vStr += str * po * (1 + PC("percStr")); R.vAll += all * po * (1 + PC("percAll"));
     R.rows.push(row);
   });
-  const varTot = R.magg + R.ind + R.vStr + R.vAll + nz(M.altreComp);
-  const dim = new Date(m.year, m.month, 0).getDate(), frac = opt && opt.fino ? Math.max(0, Math.min(1, (opt.fino < new Date(m.year, m.month - 1, 1) ? 0 : opt.fino >= new Date(m.year, m.month, 0, 23, 59) ? dim : opt.fino.getDate()) / dim)) : 1;
-  const lordo = nz(C.fisso) * frac + varTot;
-  let netto, D = null;
-  if (C.mode === "dettagliato") {
-    const inps = Math.round(lordo) * PC("inps"), fondo = nz(C.fondoBase) * PC("fondoPerc");
-    const sostBase = (R.magg + nz(C.ind1) * R.giorni) * (1 - PC("inps")), sost = sostBase * PC("sost");
-    const imp = Math.max(0, lordo - inps - fondo - sostBase), s1 = 28000 / 12, s2 = 50000 / 12;
-    let irpef = Math.min(imp, s1) * 0.23 + Math.max(0, Math.min(imp, s2) - s1) * 0.33 + Math.max(0, imp - s2) * 0.43; irpef = Math.max(0, irpef - nz(C.detr));
-    const addiz = m.month === 12 ? 0 : nz(C.addiz), tratt = (C.tratt || []).reduce((a, t) => a + nz(t.v), 0), l207 = imp * PC("l207");
-    netto = lordo - inps - fondo - sost - irpef - addiz - tratt - nz(M.altreTratt) + l207;
-    D = { inps, fondo, sost, irpef, addiz, tratt, l207, imp };
-  } else netto = lordo * (nz(C.nettoPerc) || 72) / 100 - nz(M.altreTratt);
-  return Object.assign(R, { lordo, netto, varTot, D, buoniVal: R.buoni * nz(C.buonoVal), name });
+  const dim = new Date(m.year, m.month, 0).getDate(), frac = opt.fino ? Math.max(0, Math.min(1, (opt.fino < new Date(m.year, m.month - 1, 1) ? 0 : opt.fino >= new Date(m.year, m.month, 0, 23, 59) ? dim : opt.fino.getDate()) / dim)) : 1;
+  const voci = (C.voci || []).map(v => { const n = v.tipo === "giorno" ? R.giorni : v.tipo === "ora" ? R.ore : frac; return { n: v.n || "Voce", val: nz(v.v) * n, tass: v.tass || "normale" }; });
+  const magg = R.mNott + R.mDom + R.mFest;
+  const fisso = nz(C.fisso) * frac, lordo = fisso + magg + R.ind + R.vOrd + R.vStr + voci.reduce((a, v) => a + v.val, 0) + nz(M.altreComp) * frac;
+  const sostBase = magg + R.sostInd + voci.filter(v => v.tass === "sost").reduce((a, v) => a + v.val, 0), esente = voci.filter(v => v.tass === "esente").reduce((a, v) => a + v.val, 0);
+  const N = salNet(lordo, sostBase, esente, m.month, M, frac);
+  return Object.assign(R, { fisso, magg, voci, lordo, sostBase, esente, netto: N.netto, D: N.D, tratt: N.tratt, buoniVal: R.buoni * nz(C.buonoVal), name, soglia });
+}
+function salNet(lordo, sostBase, esente, month, M, frac) {
+  const C = SAL.cfg, PC = k => nz(C[k]) / 100;
+  const tratt = (C.tratt || []).map(t => ({ n: t.n || "Trattenuta", val: t.tipo === "perc" ? lordo * nz(t.v) / 100 : nz(t.v) * (frac == null ? 1 : frac) })), tTot = tratt.reduce((a, t) => a + t.val, 0) + nz(M && M.altreTratt);
+  if (C.mode !== "dettagliato") return { netto: (lordo - esente) * (nz(C.nettoPerc) || 72) / 100 + esente - tTot, D: null, tratt };
+  const tax = lordo - esente, inps = Math.round(tax) * PC("inps"), fondo = nz(C.fondoBase) * PC("fondoPerc");
+  const sb = sostBase * (1 - PC("inps")), sost = sb * PC("sost");
+  const imp = Math.max(0, tax - inps - fondo - sb), s1 = 28000 / 12, s2 = 50000 / 12;
+  let irpef = Math.min(imp, s1) * 0.23 + Math.max(0, Math.min(imp, s2) - s1) * 0.33 + Math.max(0, imp - s2) * 0.43; irpef = Math.max(0, irpef - nz(C.detr));
+  const addiz = month === 12 ? 0 : nz(C.addiz), l207 = imp * PC("l207");
+  return { netto: lordo - inps - fondo - sost - irpef - addiz - tTot + l207, D: { inps, fondo, sost, irpef, addiz, l207, imp }, tratt };
+}
+// quante ore servono per arrivare all'obiettivo, per tipo di ora
+function salPiano(a, manca, m) {
+  const C = SAL.cfg, po = nz(C.pagaOra), p = salPct(C); if (!(po > 0) || manca <= 0) return [];
+  const M = SAL.mesi[m.key] || {}, base = salNet(a.lordo, a.sostBase, a.esente, m.month, M).netto;
+  const net1 = g => salNet(a.lordo + g, a.sostBase, a.esente, m.month, M).netto - base;
+  const T = [["Allungo (ore ordinarie, fino a " + hfx(a.soglia) + " h di turno)", po * (1 + p.all), Math.max(0, a.dispOrd - a.ordH)], ["Allungo in fascia notturna", po * (1 + p.all + p.nott), null], ["Straordinario diurno (oltre le " + hfx(a.soglia) + " h)", po * (1 + p.str), null], ["Straordinario notturno", po * (1 + p.strNott), null], ["Straordinario domenicale / festivo", po * (1 + p.strFest), null]];
+  const seen = new Set();
+  return T.map(([l, g, disp]) => { const n1 = net1(g); if (!(n1 > 0) || seen.has(l)) return null; seen.add(l); return { l, h: Math.ceil(manca / n1 * 2) / 2, perH: n1, disp }; }).filter(Boolean);
 }
 function salMonths() { return S.months.filter(m => m.month && P.name && findIn(m, P.name) && !m.predicted); }
 // ---------- PIN facoltativo ----------
@@ -2534,21 +2556,21 @@ function renderSal() {
     const busta = C.posticipo ? MESI_L[m.month % 12] + (m.month === 12 ? " " + (m.year + 1) : "") : MESI_L[m.month - 1];
     const ob = nz(MM.obiettivo), tgt = ob || all.netto, pct = v => Math.max(0, Math.min(100, tgt ? v / Math.max(tgt, all.netto) * 100 : 0));
     let obTxt = "";
-    if (ob) { if (all.netto >= ob) obTxt = `<div class="salok">🎉 Obiettivo raggiunto: ${eur0(all.netto)} su ${eur0(ob)}. Gli straordinari ora puoi rifiutarli.</div>`;
-      else { const r = all.lordo ? all.netto / all.lordo : 0.72, perH = nz(C.pagaOra) * (1 + nz(C.percStr) / 100) * r; obTxt = `<div class="salko">Ti mancano <b>${eur0(ob - all.netto)}</b> netti${perH > 0 ? ` ≈ <b>${hfx(Math.ceil((ob - all.netto) / perH * 2) / 2)} h</b> di straordinario` : ""}.</div>`; } }
+    if (ob) { if (all.netto >= ob) obTxt = `<div class="salok">🎯 Obiettivo raggiunto: ${eur0(all.netto)} su ${eur0(ob)}.</div>`;
+      else { const pl = salPiano(all, ob - all.netto, m); obTxt = `<div class="salko">Ti mancano <b>${eur0(ob - all.netto)}</b> netti.${pl.length ? ` Puoi arrivarci con circa:<ul class="salpl">${pl.map(x => `<li><b>${hfx(x.h)} h</b> di ${esc(x.l.charAt(0).toLowerCase() + x.l.slice(1))} <span class="muted">(≈ ${eur(x.perH)} netti l'ora${x.disp != null ? ` · disponibili nel mese ${hfx(x.disp)} h` : ""})</span></li>`).join("")}</ul><span class="muted" style="font-size:12px">Una sola di queste strade, oppure un mix.</span>` : ` Inserisci la paga oraria per sapere quante ore servono.`}</div>`; } }
     h += `<div class="salnav"><button class="mini" id="salp" ${idx <= 0 ? "disabled" : ""}>◀</button><b>${esc(MESI_L[m.month - 1])} ${m.year}</b><button class="mini" id="saln" ${idx >= ms.length - 1 ? "disabled" : ""}>▶</button></div>
       <div class="salbig"><span class="muted">Busta di ${esc(busta)} · netto stimato</span><div class="salnum" id="salnet">${eur0(all.netto)}</div>
         <div class="salbar"><i style="width:${pct(fino.netto)}%"></i>${ob ? `<u style="left:${pct(ob)}%"></u>` : ""}</div>
         <div class="salkpi"><span><b id="salk1">${eur0(prev.netto)}</b><br>previsto dalla griglia</span><span><b id="salk2">${eur0(fino.netto)}</b><br>maturato a oggi</span><span><b id="salk3">${eur0(all.netto)}</b><br>con gli extra</span></div>
-        <div class="muted" style="font-size:13px;margin-top:6px" id="salbuo">🍽️ ${all.buoni} buoni pasto${nz(C.buonoVal) ? " = " + eur(all.buoniVal) : ""} · ${all.giorni} giorni · ${hfx(all.ore)} h · 🌙 ${hfx(all.nott)} h notturne${all.str ? " · ⏱ " + hfx(all.str) + " h straord." : ""}${all.all ? " · ➕ " + hfx(all.all) + " h allungo" : ""}</div>
+        <div class="muted" style="font-size:13px;margin-top:6px" id="salbuo">🍽️ ${all.buoni} buoni pasto${nz(C.buonoVal) ? " = " + eur(all.buoniVal) : ""} · ${all.giorni} giorni · ${hfx(all.ore)} h · 🌙 ${hfx(all.nott)} h notturne${all.ordH ? " · ➕ " + hfx(all.ordH) + " h allungo" : ""}${all.strH ? " · ⏱ " + hfx(all.strH) + " h straordinario" : ""}</div>
         <div id="salobt">${obTxt}</div>
         <div class="fgrid" style="margin-top:8px"><div><label>🎯 Obiettivo netto del mese</label><input id="salob" inputmode="decimal" value="${esc(MM.obiettivo || "")}" placeholder="es. 1900"></div><div><label>Netto vero della busta</label><input id="salreal" inputmode="decimal" value="${esc(MM.nettoReale || "")}" placeholder="a fine mese"></div></div>
         ${nz(MM.nettoReale) ? `<p class="muted" style="font-size:13px">Differenza con la stima: <b>${(nz(MM.nettoReale) - all.netto >= 0 ? "+" : "") + eur(nz(MM.nettoReale) - all.netto)}</b>${C.mode !== "dettagliato" && all.lordo ? ` · la tua percentuale netta reale è circa ${Math.round(nz(MM.nettoReale) / all.lordo * 100)}%` : ""}</p>` : ""}
       </div>
-      <div class="sec">Giorni di lavoro · tocca per aggiungere straordinario o allungo</div><div class="salrows">${all.rows.filter(r => (r.c && r.c.kind === "lavoro") || r.str || r.all).map(r => {
-        const wd = r.dt.toLocaleDateString("it-IT", { weekday: "short", day: "numeric" });
-        return `<details class="salrow" ${r.str || r.all ? "open" : ""}><summary><span class="sd ${r.dt.getDay() === 0 || festivo(r.dt) ? "red" : ""}">${esc(wd)}</span><span>${r.c && r.c.kind === "lavoro" ? hhmm(r.c.start) + "–" + hhmm(r.c.end) : "—"}</span><span class="muted">${r.nott ? "🌙" + hfx(r.nott) + " " : ""}${r.buono ? "🍽️" : ""}${r.str ? " ⏱" + hfx(r.str) : ""}${r.all ? " ➕" + hfx(r.all) : ""}</span></summary>
-          <div class="fgrid"><div><label>Ore di straordinario</label><input data-sx="${r.i + 1}" data-f="str" inputmode="decimal" value="${esc((MM.extra || {})[r.i + 1] && MM.extra[r.i + 1].str || "")}" placeholder="0"></div><div><label>Ore di allungo</label><input data-sx="${r.i + 1}" data-f="all" inputmode="decimal" value="${esc((MM.extra || {})[r.i + 1] && MM.extra[r.i + 1].all || "")}" placeholder="0"></div></div></details>`; }).join("")}</div>
+      <div class="sec">Giorni · tocca un giorno per aggiungere ore in più</div><p class="muted" style="font-size:12px;margin:0 0 6px">Fino a ${hfx(all.soglia)} h di turno le ore in più sono ordinarie (allungo), oltre sono straordinario. Notturno, domenica e festivi li calcolo dall'orario.</p><div class="salrows">${all.rows.filter(r => (r.c && r.c.kind === "lavoro") || r.piu).map(r => {
+        const wd = r.dt.toLocaleDateString("it-IT", { weekday: "short", day: "numeric" }), e = (MM.extra || {})[r.i + 1] || {};
+        return `<details class="salrow" ${r.piu ? "open" : ""}><summary><span class="sd ${r.dt.getDay() === 0 || festivo(r.dt) ? "red" : ""}">${esc(wd)}</span><span>${r.c && r.c.kind === "lavoro" ? hhmm(r.c.start) + "–" + hhmm(r.c.end) : "riposo"}</span><span class="muted">${r.nott ? "🌙" + hfx(r.nott) + " " : ""}${r.buono ? "🍽️" : ""}${r.piu ? " +" + hfx(r.piu) + " h" : ""}</span></summary>
+          ${salDayHtml(e, r, "sx" + (r.i + 1))}</details>`; }).join("")}</div>
       <details class="more"><summary>📄 Dettaglio delle voci</summary><div class="saldet">${salDet(all, MM)}</div>
         <div class="fgrid"><div><label>Altre competenze del mese</label><input data-mm="altreComp" inputmode="decimal" value="${esc(MM.altreComp || "")}" placeholder="0"></div><div><label>Altre trattenute del mese</label><input data-mm="altreTratt" inputmode="decimal" value="${esc(MM.altreTratt || "")}" placeholder="0"></div></div></details>`;
   }
@@ -2561,9 +2583,9 @@ function renderSal() {
   // eventi
   if ($("salp")) { $("salp").onclick = () => { SALM = ms[ms.indexOf(m) - 1].key; renderSal(); }; $("saln").onclick = () => { SALM = ms[ms.indexOf(m) + 1].key; renderSal(); }; }
   const live = SALLIVE = !m ? null : () => { const a = salMese(m), f = salMese(m, { fino: (() => { const t = new Date(); t.setHours(23, 59, 59, 0); return t; })() }); $("salnet").textContent = eur0(a.netto); $("salk1").textContent = eur0(salMese(m, { noExtra: true }).netto); $("salk2").textContent = eur0(f.netto); $("salk3").textContent = eur0(a.netto);
-    $("salbuo").textContent = `🍽️ ${a.buoni} buoni pasto${nz(SAL.cfg.buonoVal) ? " = " + eur(a.buoniVal) : ""} · ${a.giorni} giorni · ${hfx(a.ore)} h · 🌙 ${hfx(a.nott)} h notturne${a.str ? " · ⏱ " + hfx(a.str) + " h straord." : ""}${a.all ? " · ➕ " + hfx(a.all) + " h allungo" : ""}`; };
+    $("salbuo").textContent = `🍽️ ${a.buoni} buoni pasto${nz(SAL.cfg.buonoVal) ? " = " + eur(a.buoniVal) : ""} · ${a.giorni} giorni · ${hfx(a.ore)} h · 🌙 ${hfx(a.nott)} h notturne${a.ordH ? " · ➕ " + hfx(a.ordH) + " h allungo" : ""}${a.strH ? " · ⏱ " + hfx(a.strH) + " h straordinario" : ""}`; };
   out.querySelectorAll("input").forEach(i => { i.addEventListener("focus", () => SALT = true); i.addEventListener("blur", () => { SALT = false; }); });
-  out.querySelectorAll("[data-sx]").forEach(i => i.oninput = () => { const MM = SAL.mesi[m.key]; MM.extra = MM.extra || {}; const d = MM.extra[i.dataset.sx] = MM.extra[i.dataset.sx] || {}; d[i.dataset.f] = i.value.trim(); salSave(); live(); });
+  out.querySelectorAll("[data-xd]").forEach(i => { const ev = i.tagName === "SELECT" ? "onchange" : "oninput"; i[ev] = () => { const day = +i.dataset.xd, MM = SAL.mesi[m.key]; MM.extra = MM.extra || {}; const d = MM.extra[day] = MM.extra[day] || {}; delete d.str; delete d.all; d[i.dataset.f] = i.value.trim(); salSave(); live(); const a = salMese(m), row = a.rows.find(x => x.i === day - 1), el = out.querySelector(`[data-xr="${day}"]`); if (el && row) el.innerHTML = salSplit(row); }; });
   out.querySelectorAll("[data-mm]").forEach(i => i.oninput = () => { SAL.mesi[m.key][i.dataset.mm] = i.value.trim(); salSave(); live(); });
   if ($("salob")) { $("salob").onchange = () => { SAL.mesi[m.key].obiettivo = $("salob").value.trim(); salSave(); renderSal(); }; $("salreal").onchange = () => { SAL.mesi[m.key].nettoReale = $("salreal").value.trim(); salSave(); renderSal(); }; }
   out.querySelectorAll("details.salrow").forEach(d => d.addEventListener("toggle", () => {}));
@@ -2572,53 +2594,73 @@ function renderSal() {
   $("salexp").onclick = async () => { try { const CL = window.__inturno || window.claude; const dl = CL && await CL.use("downloads"); const data = JSON.stringify({ app: "InTurno", tipo: "stipendio", v: 1, dati: SAL }, null, 1); if (dl) await dl.save({ filename: "InTurno-stipendio.json", data }); $("salmsg").textContent = "Copia scaricata: conservala tu, contiene i tuoi dati di busta paga."; } catch (e) { $("salmsg").textContent = "Copia non riuscita."; } };
   $("salimp").onchange = async e => { const f = e.target.files[0]; if (!f) return; try { const o = JSON.parse(await f.text()); if (!o || o.tipo !== "stipendio" || !o.dati) throw 0; SAL.cfg = Object.assign(SAL_DEF().cfg, o.dati.cfg || {}); SAL.mesi = o.dati.mesi || {}; localStorage.setItem(SALKEY || SALK(), JSON.stringify(SAL)); renderSal(); } catch (er) { $("salmsg").textContent = "Il file non è una copia di InTurno."; } };
 }
+function salSplit(r) { if (!r || !r.piu) return ""; const parts = []; if (r.ord) parts.push(`<b>${hfx(r.ord)} h</b> allungo (ordinarie)`); if (r.str) parts.push(`<b>${hfx(r.str)} h</b> straordinario`); return "→ " + parts.join(" + ") + (r.xNott ? ` · ${hfx(r.xNott)} h in fascia notturna` : ""); }
+function salDayHtml(e, r, id) { const d = r.i + 1;
+  return `<div class="fgrid"><div><label>Ore in più</label><input data-xd="${d}" data-f="piu" inputmode="decimal" value="${esc(e.piu || (nz(e.str) + nz(e.all) || ""))}" placeholder="0"></div><div><label>Quando</label><select data-xd="${d}" data-f="dove" style="width:100%"><option value="dopo" ${e.dove !== "prima" ? "selected" : ""}>Dopo il turno</option><option value="prima" ${e.dove === "prima" ? "selected" : ""}>Prima del turno</option></select></div></div><div class="muted" style="font-size:12px" data-xr="${d}">${salSplit(r)}</div>`; }
 function salDet(a, MM) {
   const C = SAL.cfg, row = (l, v, neg) => v ? `<div class="sdr"><span>${l}</span><b>${neg ? "− " : ""}${eur(v)}</b></div>` : "";
-  let h = row("Retribuzione fissa", nz(C.fisso)) + row("Maggiorazioni notturno/domenica/festivi", a.magg) + row(esc(C.ind1n || "Indennità") + " + altre indennità giornaliere", a.ind) + row(`Straordinario (${hfx(a.str)} h)`, a.vStr) + row(`Allungo (${hfx(a.all)} h)`, a.vAll) + row("Altre competenze", nz(MM.altreComp));
-  h += `<div class="sdr tot"><span>Lordo</span><b>${eur(a.lordo)}</b></div>`;
-  if (a.D) h += row("INPS", a.D.inps, 1) + row("Fondo pensione", a.D.fondo, 1) + row("Imposta sostitutiva turni", a.D.sost, 1) + row("IRPEF (dopo detrazioni)", a.D.irpef, 1) + row("Addizionali", a.D.addiz, 1) + row("Trattenute fisse", a.D.tratt, 1) + row("Altre trattenute", nz(MM.altreTratt), 1) + row("Indennità L.207/2024", a.D.l207);
-  else h += `<div class="sdr"><span>Netto ≈ ${nz(C.nettoPerc) || 72}% del lordo</span><b></b></div>` + row("Altre trattenute", nz(MM.altreTratt), 1);
+  let h = `<div class="sdh">Competenze</div>` + row("Retribuzione" + (C.livello ? " · livello " + esc(C.livello) : ""), a.fisso) + row(`Maggiorazione notturna (${hfx(a.nott)} h)`, a.mNott) + row(`Maggiorazione domenicale (${hfx(a.dom)} h)`, a.mDom) + row(`Maggiorazione festiva (${hfx(a.fest)} h)`, a.mFest)
+    + row(esc(C.ind1n || "Indennità") + ` (${a.giorni} gg)`, nz(C.ind1) * a.giorni) + row(esc(C.ind2n || "Altra indennità") + ` (${a.giorni} gg)`, nz(C.ind2) * a.giorni)
+    + row(`Allungo / ore ordinarie in più (${hfx(a.ordH)} h)`, a.vOrd) + row(`Straordinario (${hfx(a.strH)} h${a.strNott ? ", " + hfx(a.strNott) + " notturne" : ""})`, a.vStr)
+    + a.voci.map(v => row(esc(v.n), v.val)).join("") + row("Altre competenze", nz(MM.altreComp));
+  h += `<div class="sdr tot"><span>Totale lordo</span><b>${eur(a.lordo)}</b></div><div class="sdh">Trattenute</div>`;
+  if (a.D) h += row("Contributi INPS", a.D.inps, 1) + row("Fondo pensione", a.D.fondo, 1) + row("Imposta sostitutiva sui turni", a.D.sost, 1) + row("IRPEF (dopo le detrazioni)", a.D.irpef, 1) + row("Addizionali regionale e comunale", a.D.addiz, 1);
+  else h += `<div class="sdr"><span>Tasse e contributi ≈ ${100 - (nz(C.nettoPerc) || 72)}% del lordo</span><b>− ${eur((a.lordo - a.esente) * (100 - (nz(C.nettoPerc) || 72)) / 100)}</b></div>`;
+  h += (a.tratt || []).map(t => row(esc(t.n), t.val, 1)).join("") + row("Altre trattenute", nz(MM.altreTratt), 1) + (a.D ? row("Indennità L.207/2024", a.D.l207) : "");
   return h + `<div class="sdr tot"><span>Netto stimato</span><b>${eur(a.netto)}</b></div><p class="muted" style="font-size:12px">È una stima: per la busta vera fa fede il cedolino.</p>`;
 }
 function salCfgHtml() {
-  const C = SAL.cfg, f = (k, l, ph, cls) => `<div class="${cls || ""}"><label>${l}</label><input data-sc="${k}" inputmode="decimal" value="${esc(C[k] == null ? "" : C[k])}" placeholder="${ph || ""}"></div>`;
-  return `<div class="ovtypes" style="margin-top:6px"><span class="chip ${C.mode !== "dettagliato" ? "sel" : ""}" data-sm="semplice">Calcolo semplice</span><span class="chip ${C.mode === "dettagliato" ? "sel" : ""}" data-sm="dettagliato">Calcolo dettagliato</span></div>
-    <div class="fgrid">${f("fisso", "Retribuzione fissa mensile (lorda)", "es. 1650")}${f("pagaOra", "Paga oraria lorda", "es. 10,50")}
-      ${f("percStr", "Straordinario +%", "30")}${f("percAll", "Allungo / prolungamento +%", "30")}
-      ${f("percNott", "Notturno +%", "es. 25")}${f("percDom", "Domenica diurna +%", "es. 30")}
-      ${f("percFest", "Festivo diurno +%", "es. 50")}${f("percNottDom", "Notte di domenica +%", "somma")}
-      ${f("percNottFest", "Notte festiva +%", "somma")}${f("patrono", "Patrono (giorno/mese)", "29/6")}
-      ${f("ind1", esc(C.ind1n || "Indennità") + " € al giorno", "0")}${f("ind2", "Altra indennità € al giorno", "0")}
-      ${f("buonoVal", "Valore buono pasto €", "es. 7")}
-      ${C.mode !== "dettagliato" ? f("nettoPerc", "Netto ≈ % del lordo", "72") : ""}</div>
-    ${C.mode === "dettagliato" ? `<div class="sec">Trattenute</div><div class="fgrid">${f("inps", "INPS %", "9,19")}${f("sost", "Imposta sostitutiva turni %", "15")}${f("fondoBase", "Fondo pensione: base €", "")}${f("fondoPerc", "Fondo pensione %", "")}${f("detr", "Detrazioni IRPEF mensili €", "")}${f("addiz", "Addizionali mensili €", "")}${f("l207", "Indennità L.207/2024 %", "")}</div>
-      <div class="sec">Trattenute fisse</div>${(C.tratt || []).map((t, k) => `<div class="row" style="gap:6px;margin:4px 0"><input data-tn="${k}" value="${esc(t.n || "")}" placeholder="es. Sindacato" style="flex:2"><input data-tv="${k}" inputmode="decimal" value="${esc(t.v || "")}" placeholder="€" style="flex:1"><button class="mini" data-tx="${k}">✕</button></div>`).join("")}<button class="mini" id="saltadd">+ Trattenuta fissa</button>` : ""}
+  const C = SAL.cfg, f = (k, l, ph, cls, txt) => `<div class="${cls || ""}"><label>${l}</label><input data-sc="${k}" ${txt ? "" : 'inputmode="decimal"'} value="${esc(C[k] == null ? "" : C[k])}" placeholder="${ph || ""}"></div>`;
+  return `<p class="muted" style="font-size:13px">Copia le voci dal tuo cedolino: ogni busta è diversa (livello, maggiorazioni, indennità, cessione del quinto…). Lascia vuoto quello che non hai.</p>
+    <div class="ovtypes" style="margin-top:6px"><span class="chip ${C.mode !== "dettagliato" ? "sel" : ""}" data-sm="semplice">Calcolo semplice</span><span class="chip ${C.mode === "dettagliato" ? "sel" : ""}" data-sm="dettagliato">Calcolo dettagliato</span></div>
+    <div class="sec">Retribuzione</div><div class="fgrid">${f("livello", "Livello / qualifica", "es. 4° livello", "", 1)}${f("fisso", "Retribuzione mensile lorda €", "es. 1650")}${f("pagaOra", "Paga oraria lorda €", "es. 10,50")}${f("soglia", "Ore ordinarie massime al giorno", "8")}</div>
+    <div class="sec">Maggiorazioni sulle ore di turno (+%)</div><div class="fgrid">${f("percNott", "Notturno", "es. 25")}${f("percDom", "Domenica", "es. 30")}${f("percFest", "Festivo", "es. 50")}${f("percNottDom", "Notte di domenica", "se vuoto: somma")}${f("percNottFest", "Notte festiva", "se vuoto: somma")}${f("patrono", "Patrono (giorno/mese)", "es. 29/6", "", 1)}</div>
+    <div class="sec">Ore in più (+%)</div><div class="fgrid">${f("percAll", "Allungo entro le ore ordinarie", "0 = paga normale")}${f("percStr", "Straordinario diurno", "es. 25")}${f("percStrNott", "Straordinario notturno", "se vuoto: somma")}${f("percStrFest", "Straordinario festivo/domenica", "se vuoto: somma")}</div>
+    <div class="sec">Indennità e altre voci</div><div class="fgrid">${f("ind1", esc(C.ind1n || "Indennità turno") + " € al giorno lavorato", "0")}${f("ind2", esc(C.ind2n || "Altra indennità") + " € al giorno", "0")}${f("buonoVal", "Valore buono pasto €", "es. 7")}</div>
+    ${(C.voci || []).map((v, k) => `<div class="salvr"><input data-vn="${k}" value="${esc(v.n || "")}" placeholder="Nome voce"><input data-vv="${k}" inputmode="decimal" value="${esc(v.v || "")}" placeholder="€"><select data-vt="${k}"><option value="mese" ${v.tipo !== "giorno" && v.tipo !== "ora" ? "selected" : ""}>al mese</option><option value="giorno" ${v.tipo === "giorno" ? "selected" : ""}>a giorno lavorato</option><option value="ora" ${v.tipo === "ora" ? "selected" : ""}>a ora lavorata</option></select><select data-vx="${k}"><option value="normale" ${(v.tass || "normale") === "normale" ? "selected" : ""}>tassata</option><option value="sost" ${v.tass === "sost" ? "selected" : ""}>imposta 15%</option><option value="esente" ${v.tass === "esente" ? "selected" : ""}>esente</option></select><button class="mini" data-vdel="${k}">✕</button></div>`).join("")}
+    <button class="mini" id="salvadd">+ Altra competenza</button>
+    ${C.mode !== "dettagliato" ? `<div class="sec">Tasse e contributi</div><div class="fgrid">${f("nettoPerc", "Netto ≈ % del lordo", "72")}</div><p class="muted" style="font-size:12px">Per trovarla: netto ÷ lordo di una busta recente × 100 (prima delle trattenute personali qui sotto).</p>`
+      : `<div class="sec">Tasse e contributi</div><div class="fgrid">${f("inps", "Contributi INPS %", "9,19")}${f("sost", "Imposta sostitutiva turni %", "15")}${f("fondoBase", "Fondo pensione: base €", "")}${f("fondoPerc", "Fondo pensione %", "")}${f("detr", "Detrazioni IRPEF mensili €", "")}${f("addiz", "Addizionali mensili €", "")}${f("l207", "Indennità L.207/2024 %", "")}</div>`}
+    <div class="sec">Trattenute personali</div>${(C.tratt || []).map((t, k) => `<div class="salvr t"><input data-tn="${k}" value="${esc(t.n || "")}" placeholder="es. Cessione del quinto"><input data-tv="${k}" inputmode="decimal" value="${esc(t.v || "")}" placeholder="${t.tipo === "perc" ? "%" : "€"}"><select data-tt="${k}"><option value="fisso" ${t.tipo !== "perc" ? "selected" : ""}>€ al mese</option><option value="perc" ${t.tipo === "perc" ? "selected" : ""}>% del lordo</option></select><button class="mini" data-tx="${k}">✕</button></div>`).join("")}
+    <div class="stbtn" style="flex-wrap:wrap">${["Cessione del quinto", "Sindacato", "Parcheggio", "Mensa", "Prestito"].map(n => `<button class="mini" data-tpre="${n}">+ ${n}</button>`).join("")}<button class="mini" data-tpre="">+ Altra</button></div>
     <label class="row" style="gap:8px;margin-top:8px"><input type="checkbox" id="salpost" ${C.posticipo ? "checked" : ""}> <span>Le maggiorazioni arrivano nella busta del mese dopo</span></label>
     <p class="muted" style="font-size:12px">Fascia notturna e ore minime per il buono pasto si cambiano in ⚙️ Impostazioni (ora: ${esc(SET.nDa || "20:00")}–${esc(SET.nA || "08:00")}, buono da ${esc(String(SET.buonoOre || 6))} h).</p>`;
 }
 function salCfgBind(out) {
-  const C = SAL.cfg, upd = () => { salSave(); };
-  out.querySelectorAll("[data-sc]").forEach(i => i.oninput = () => { C[i.dataset.sc] = i.value.trim(); upd(); try { SALLIVE && SALLIVE(); } catch (e) {} });
-  out.querySelectorAll("[data-sm]").forEach(c => c.onclick = () => { C.mode = c.dataset.sm; upd(); renderSal(); $("salcfg").open = true; });
+  const C = SAL.cfg, upd = () => { salSave(); try { SALLIVE && SALLIVE(); } catch (e) {} }, re = () => { salSave(); renderSal(); const d = $("salcfg"); if (d) d.open = true; };
+  out.querySelectorAll("[data-sc]").forEach(i => i.oninput = () => { C[i.dataset.sc] = i.value.trim(); upd(); });
+  out.querySelectorAll("[data-sm]").forEach(c => c.onclick = () => { C.mode = c.dataset.sm; re(); });
+  out.querySelectorAll("[data-vn]").forEach(i => i.oninput = () => { C.voci[+i.dataset.vn].n = i.value; upd(); });
+  out.querySelectorAll("[data-vv]").forEach(i => i.oninput = () => { C.voci[+i.dataset.vv].v = i.value.trim(); upd(); });
+  out.querySelectorAll("[data-vt]").forEach(i => i.onchange = () => { C.voci[+i.dataset.vt].tipo = i.value; upd(); });
+  out.querySelectorAll("[data-vx]").forEach(i => i.onchange = () => { C.voci[+i.dataset.vx].tass = i.value; upd(); });
+  out.querySelectorAll("[data-vdel]").forEach(b => b.onclick = () => { C.voci.splice(+b.dataset.vdel, 1); re(); });
+  $("salvadd").onclick = () => { C.voci = C.voci || []; C.voci.push({ n: "", v: "", tipo: "mese", tass: "normale" }); re(); };
   out.querySelectorAll("[data-tn]").forEach(i => i.oninput = () => { C.tratt[+i.dataset.tn].n = i.value; upd(); });
   out.querySelectorAll("[data-tv]").forEach(i => i.oninput = () => { C.tratt[+i.dataset.tv].v = i.value.trim(); upd(); });
-  out.querySelectorAll("[data-tx]").forEach(b => b.onclick = () => { C.tratt.splice(+b.dataset.tx, 1); upd(); renderSal(); $("salcfg").open = true; });
-  if ($("saltadd")) $("saltadd").onclick = () => { C.tratt = C.tratt || []; C.tratt.push({ n: "", v: "" }); upd(); renderSal(); $("salcfg").open = true; };
-  $("salpost").onchange = e => { C.posticipo = e.target.checked; upd(); renderSal(); $("salcfg").open = true; };
+  out.querySelectorAll("[data-tt]").forEach(i => i.onchange = () => { C.tratt[+i.dataset.tt].tipo = i.value; re(); });
+  out.querySelectorAll("[data-tx]").forEach(b => b.onclick = () => { C.tratt.splice(+b.dataset.tx, 1); re(); });
+  out.querySelectorAll("[data-tpre]").forEach(b => b.onclick = () => { C.tratt = C.tratt || []; C.tratt.push({ n: b.dataset.tpre, v: "", tipo: "fisso" }); re(); });
+  $("salpost").onchange = e => { C.posticipo = e.target.checked; re(); };
 }
 // straordinario e allungo anche dalla finestra del giorno (solo per i propri turni)
 function salOvHtml(m, name, i) {
   salLoad();
   if (!SAL.cfg.on || !P.name || findIn(m, P.name) !== name) return "";
-  const e = ((SAL.mesi[m.key] || {}).extra || {})[i + 1] || {};
-  return `<div class="fgrid salov"><div><label>⏱ Ore di straordinario</label><input id="ovsx" inputmode="decimal" value="${esc(e.str || "")}" placeholder="0"></div><div><label>➕ Ore di allungo</label><input id="ovsa" inputmode="decimal" value="${esc(e.all || "")}" placeholder="0"></div></div><p class="muted" style="font-size:12px;margin:2px 0">💰 Restano solo su questo telefono e aggiornano il contatore dello stipendio.</p>`;
+  const e = ((SAL.mesi[m.key] || {}).extra || {})[i + 1] || {}, a = salMese(m), r = a && a.rows.find(x => x.i === i);
+  return `<div class="salov"><b style="font-size:13px">💰 Ore in più</b>${salDayHtml(e, r || { i, piu: 0 }, "ov")}<p class="muted" style="font-size:12px;margin:2px 0">Restano solo su questo telefono e aggiornano il contatore dello stipendio.</p></div>`;
 }
 function salOvBind(m, name, i) {
-  if (!$("ovsx")) return;
-  const put = (f, v) => { const MM = SAL.mesi[m.key] = SAL.mesi[m.key] || {}; MM.extra = MM.extra || {}; const d = MM.extra[i + 1] = MM.extra[i + 1] || {}; d[f] = String(v).trim(); salSave(); };
-  $("ovsx").oninput = e => put("str", e.target.value); $("ovsa").oninput = e => put("all", e.target.value);
+  const box = $("ovedit"); if (!box) return;
+  box.querySelectorAll(".salov [data-xd]").forEach(el => { const ev = el.tagName === "SELECT" ? "onchange" : "oninput"; el[ev] = () => { const MM = SAL.mesi[m.key] = SAL.mesi[m.key] || {}; MM.extra = MM.extra || {}; const d = MM.extra[i + 1] = MM.extra[i + 1] || {}; delete d.str; delete d.all; d[el.dataset.f] = el.value.trim(); salSave(); const a = salMese(m), r = a && a.rows.find(x => x.i === i), o = box.querySelector(`[data-xr="${i + 1}"]`); if (o) o.innerHTML = salSplit(r); }; });
 }
 { const _ra = renderAll; renderAll = function () { _ra.apply(this, arguments); try { if (!$("t-sal").classList.contains("hidden") && !SALT) renderSal(); } catch (e) {} }; }
+// schede visibili in base al profilo scelto nella configurazione (studente / vita privata: niente turni e busta paga)
+function salTabs() { try { const t = SET.tipo || "", noWork = t === "studente" || t === "privato";
+  const hide = { sal: noWork, me: noWork, st: !!t && t !== "griglia" };
+  Object.entries(hide).forEach(([k, h]) => { const tab = document.querySelector(`.tab[data-t="${k}"]`); if (tab) tab.style.display = h ? "none" : ""; if (h && tab && tab.classList.contains("on")) showTab("ag"); }); } catch (e) {} }
+{ const _ra2 = renderAll; renderAll = function () { _ra2.apply(this, arguments); salTabs(); }; }
+setTimeout(salTabs, 500);
 
 // ================= PROFILO + MEMORIA =================
 const P = { name: null, editing: false };
