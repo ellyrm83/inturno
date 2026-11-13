@@ -2967,6 +2967,7 @@ async function redeemCode(db, raw, nome) {
   try { sessionStorage.removeItem("turni.invito"); localStorage.setItem("turni.profilo", N); } catch {}
   P.name = N; URL_CODE = "";
   gateMsg(`<h2>✅ Codice accettato</h2><p>Benvenuta! Sto aprendo l'app…</p>`);
+  setTimeout(() => { try { location.replace(location.pathname); } catch (e) { location.reload(); } }, 1200);
   return true;
 }
 function startInviti(db, anchor) {
