@@ -2638,7 +2638,7 @@ const fmtCode = c => String(c).slice(0, 3) + "-" + String(c).slice(3);
 const normCode = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const fmtScad = ms => new Date(ms).toLocaleString("it-IT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 let URL_CODE = ""; try { URL_CODE = normCode(new URLSearchParams(location.search).get("invito")); if (URL_CODE) sessionStorage.setItem("turni.invito", URL_CODE); else URL_CODE = sessionStorage.getItem("turni.invito") || ""; } catch {}
-const invFirst = d => { const n = String((d && (d.nome || d.nota)) || "").trim(); if (!n) return ""; const w = n.split(/[\s,]+/).filter(Boolean); const f = (d && d.nome && w.length > 1) ? w[w.length - 1] : w[0]; return f.charAt(0).toUpperCase() + f.slice(1).toLowerCase(); };
+const invFirst = d => { let n = String((d && (d.nome || d.nota)) || "").trim(); if (!n) return ""; if (n.includes(",")) n = n.split(",").slice(1).join(" ").trim() || n; return n.toLowerCase().split(/\s+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" "); };
 const invMsg = (c, scade, d) => `Ciao${invFirst(d) ? " " + invFirst(d) : ""}! 😊\nTi invito su InTurno, l'app per incastrare turni, impegni e uscite.\n\n👉 Apri questo link: ${APP_URL}?invito=${c}\n1. Crea il tuo account (email e una password a tua scelta)\n2. Tocca «Entra con il codice»: il codice ${fmtCode(c)} è già inserito\n\n🔒 Il codice è personale e vale una sola volta, entro ${fmtScad(scade)}. Non inoltrarlo.`;
 async function prefillFromCode(db) {
   if (!URL_CODE) return; try { const iv = await db.doc("inviti/" + URL_CODE).get(); const el = $("gname"); if (iv.exists && iv.data().nome && el && !el.value) el.value = iv.data().nome; } catch {}
