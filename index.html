@@ -1620,8 +1620,11 @@ let OCRW = null;
 function ocrLoad(src) { return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("Non riesco a scaricare il lettore: controlla la connessione.")); document.head.appendChild(s); }); }
 async function ocrEngine(say) {
   if (window.__ocrTest) return window.__ocrTest;
-  if (!window.Tesseract) { say && say("Scarico il lettore (solo la prima volta)…"); await ocrLoad(OCR_LIB); }
-  if (!OCRW) { say && say("Preparo il lettore…"); OCRW = await Tesseract.createWorker("eng", 1, { logger: () => {} }); }
+  if (!window.Tesseract) { say && say("Scarico il lettore (solo la prima volta, circa 10 MB)…"); try { await ocrLoad(OCR_LIB); } catch (e) { await ocrLoad("https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js"); } }
+  if (!OCRW) { say && say("Preparo il lettore (solo la prima volta può volerci un minuto)…");
+    const t0 = Date.now(), tick = setInterval(() => say && say(`Preparo il lettore… ${Math.round((Date.now() - t0) / 1000)} s (la prima volta scarica i dati di lettura)`), 3000);
+    try { OCRW = await Promise.race([Tesseract.createWorker("eng", 1, { logger: () => {} }), new Promise((_, rej) => setTimeout(() => rej(new Error("il lettore non si è avviato entro 3 minuti (connessione lenta?)")), 180000))]); }
+    catch (e) { throw new Error("Preparazione del lettore non riuscita: " + (e && e.message || e)); } finally { clearInterval(tick); } }
   let last = "";
   return { rec: async (canvas, psm, wl) => { const k = psm + "|" + (wl || ""); if (k !== last) { await OCRW.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: wl || "", preserve_interword_spaces: "1" }); last = k; } const r = await OCRW.recognize(canvas); return String(r.data.text || "").replace(/\s+/g, " ").trim(); } };
 }
@@ -1799,7 +1802,7 @@ function openManual(target, why, ocr) {
       if (!r.codes) { say(r.nome ? `Non ho trovato "${nome}" con sicurezza (il più simile: ${r.nome}). Controlla il nome o prova con una foto più dritta e nitida, oppure scrivi i codici a mano.` : "Non riesco a trovare la tabella nella foto. Prova con una foto dritta, a fuoco e con buona luce, che inquadri la griglia; oppure scrivi i codici a mano."); }
       else if (r.weekly) { say(`✓ Trovato: ${r.nome.length > 60 ? "la squadra con " + nome : r.nome}. È una griglia settimanale: controlla qui sotto.`); openWeekly(nome, r.codes, r.nome.length > 60 ? "" : r.nome); }
       else { $("mnp").value = r.codes.join(" "); const dub = r.codes.filter(c => c === "?").length; say(`✓ Trovato: ${r.nome}. Letti ${r.codes.length} giorni${dub ? `, ${dub} da controllare (?)` : ""}. Controlla l'anteprima qui sotto: i giorni in rosso sono dubbi.`); $("mngo").disabled = false; $("mngo").click(); }
-    } catch (e) { console.error(e); say("Lettura non riuscita: " + (e && e.message || e)); }
+    } catch (e) { console.error(e); say("Lettura non riuscita: " + (e && e.message || e) + " · " + (navigator.userAgent.match(/iPhone OS [\d_]+|Android [\d.]+|Chrome\/\d+|Version\/[\d.]+ /g) || []).join(" ")); }
     btn.disabled = false; $("mngo").disabled = false;
   };
   $("mnx").onclick = () => { box.innerHTML = ""; };
