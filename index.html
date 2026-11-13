@@ -161,7 +161,7 @@ a.wa{text-decoration:none;display:inline-flex;align-items:center;justify-content
 .wdots{display:flex;gap:6px;justify-content:center;margin-bottom:14px}.wdots i{width:28px;height:6px;border-radius:3px;background:var(--line)}.wdots i.on{background:var(--acc)}
 .wcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.wcard{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:4px;cursor:pointer}.wcard.on{border-color:var(--acc);background:var(--accs)}.wcard .muted{font-size:12px}.wico{font-size:26px}
 .wnav{margin-top:18px;justify-content:space-between}.wnext{padding-left:20px;line-height:1.8}
-.lgrow{grid-template-columns:60px 1fr 1fr 1fr auto}.lgrow input,.lgrow select{min-width:0;font:inherit;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px}
+.lgrow{grid-template-columns:52px 86px minmax(0,1fr) minmax(0,1fr) 34px}.lgrow input,.lgrow select{min-width:0;font:inherit;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px}
 .usrow{grid-template-columns:1fr;gap:4px;border-bottom:1px solid var(--line);padding:6px 0}.usrow label{display:flex;align-items:center;gap:6px}.usrow input,.usrow select{font:inherit;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px}
 .impdot{display:block;width:6px;height:6px;border-radius:50%;background:#e86a92;margin:1px auto 0}
 .localbar{background:var(--sun);border-radius:14px;padding:8px 12px;font-size:12px;margin-bottom:12px;color:#5d4a10}
@@ -516,6 +516,9 @@ function decode(code) {
     const letter = m[1].slice(-1), n = +m[2];
     const LET = RU && RU.lettere ? RU.lettere : { D: 4, E: 5, F: 6, H: 8 };
     const div = RU && +RU.div > 0 ? +RU.div : 2;
+    if (RU && RU.inizio && (RU.formula === false || !(LET[letter] > 0)) && n < 24 && !m[3]) { // M7 = dalle 7, durata del turno
+      const st = n, hrs = +((RU.durate || {})[letter]) || +RU.durata || 8, en = st + hrs, ov2 = (a, b) => Math.max(0, Math.min(en, b) - Math.max(st, a));
+      return { kind: "lavoro", label: c, start: st, end: en, hours: hrs, letter, night: ov2(0, 8) + ov2(20, 32) }; }
     if ((RU && RU.formula === false) || !(LET[letter] > 0) || n / div >= 24) return { kind: "altro", label: c };
     const start = n / div;
     const hours = +LET[letter];
@@ -1748,36 +1751,37 @@ async function ocrReadPerson(f, query, days, say) {
   }
   return { nome: bestAll ? bestAll.txt : "", score: bestAll ? bestAll.sc : 0, codes: null };
 }
-// griglia settimanale (LUN…DOM, es. squadre): diventa un turno che si ripete ogni settimana, con la legenda dei codici
+// griglia settimanale (LUN…DOM, es. squadre): diventa un turno che si ripete ogni settimana
 function openWeekly(nome, codes, found) {
   const box = $("aiout"); if (!box) return;
   const DN = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"], t = new Date(), mon = new Date(t.getFullYear(), t.getMonth(), t.getDate() - ((t.getDay() + 6) % 7));
-  const uniq = [...new Set(codes.filter(c => c && c !== "?"))];
-  const L = {}; uniq.forEach(c => { const d = decode(c); if (d.kind === "lavoro") L[c] = { tipo: "lavoro", i: fmtHH(d.start), f: fmtHH(d.end), noto: true }; else if (d.kind === "riposo" || d.kind === "ferie") L[c] = { tipo: "riposo", noto: true }; else if (/^(RIP|GF|R|RIPOSO|FR)$/.test(c)) L[c] = { tipo: "riposo" }; else { const m = c.match(/^[A-Z](\d{1,2})$/); const st = m ? Math.min(23, +m[1]) : 8; L[c] = { tipo: "lavoro", i: fmtHH(st), f: fmtHH((st + 7) % 24) }; } });
+  const C = SET.codici; let dur = +C.durata || 8;
+  const RIPC = /^(RIP|GF|R|R1|R2|RIPOSO|FR|RF)$/;
+  // codici tipo M7/P14/N23 = ora di inizio: l'app li capisce da sola, basta la durata
+  const sched = c => { if (!c || c === "?") return null; const d = decode(c); if (d.kind === "lavoro") return { i: d.start, f: d.end }; if (d.kind === "riposo" || d.kind === "ferie" || RIPC.test(c)) return "R"; const m = c.match(/^[A-Z](\d{1,2})$/); return m && +m[1] < 24 ? { i: +m[1], f: +m[1] + dur } : null; };
   const draw = () => {
-    box.innerHTML = `<div class="ovbox"><b>📅 Griglia settimanale</b><p class="muted" style="font-size:13px">Ho letto una settimana (lunedì → domenica)${found ? " per <b>" + esc(found) + "</b>" : ""}. Controlla i codici e dimmi che orario indica ciascuno: lo ricordo per le prossime volte.</p>
-      <div class="aigrid">${codes.map((c, k) => `<label><span>${DN[k] || ""}</span><input data-wk="${k}" value="${esc(c)}"></label>`).join("")}</div>
-      <div class="sec">Che orario è ogni codice?</div>${Object.entries(L).map(([c, x]) => `<div class="fxrow wkl"><b>${esc(c)}</b><select data-lt="${esc(c)}"><option value="lavoro" ${x.tipo === "lavoro" ? "selected" : ""}>lavoro</option><option value="riposo" ${x.tipo !== "lavoro" ? "selected" : ""}>riposo</option></select>${x.tipo === "lavoro" ? `<input type="time" data-li="${esc(c)}" value="${esc(x.i || "")}"><input type="time" data-lf="${esc(c)}" value="${esc(x.f || "")}">` : "<span></span><span></span>"}</div>`).join("")}
-      <div class="fgrid" style="margin-top:8px"><div class="full"><label>Settimana che inizia lunedì</label><input type="date" id="wkst" value="${isoDay(mon)}"></div></div>
+    const rows = codes.map(c => sched(c));
+    box.innerHTML = `<div class="ovbox"><b>📅 Griglia settimanale</b><p class="muted" style="font-size:13px">Ho letto una settimana (lunedì → domenica)${found ? " per <b>" + esc(found) + "</b>" : ""}. Il numero del codice è l'ora d'inizio (M7 = dalle 7): dimmi solo quanto dura il turno.</p>
+      <div class="fgrid"><div><label>Durata del turno (ore)</label><input id="wkdur" inputmode="decimal" value="${esc(String(dur))}"></div><div><label>Settimana che inizia lunedì</label><input type="date" id="wkst" value="${isoDay(mon)}"></div></div>
+      <div class="aigrid" style="margin-top:8px">${codes.map((c, k) => { const r = rows[k]; return `<label><span>${DN[k] || ""}</span><input data-wk="${k}" value="${esc(c)}"><small class="aihint ${!r ? "bad" : ""}">${r === "R" ? "Riposo" : r ? hhmm(r.i) + "–" + hhmm(r.f) : "da controllare ?"}</small></label>`; }).join("")}</div>
       <label class="row" style="gap:8px;margin-top:6px"><input type="checkbox" id="wkrep" checked> <span>Si ripete uguale ogni settimana</span></label>
-      <p class="muted" style="font-size:12px">Se invece la squadra cambia riga ogni settimana (rotazione), dimmelo: si può leggere tutta la tabella e calcolare la rotazione completa.</p>
+      <p class="muted" style="font-size:12px">Se la squadra cambia riga ogni settimana (rotazione), dimmelo: si può leggere tutta la tabella e calcolare la rotazione completa.</p>
       <div class="stbtn"><button class="btn" id="wksave">Salva i turni di ${esc(nome)}</button></div><p class="muted" id="wkmsg"></p></div>`;
-    const col = () => { box.querySelectorAll("[data-wk]").forEach(i => codes[+i.dataset.wk] = i.value.trim().toUpperCase()); box.querySelectorAll("[data-li]").forEach(i => L[i.dataset.li].i = i.value); box.querySelectorAll("[data-lf]").forEach(i => L[i.dataset.lf].f = i.value); };
-    box.querySelectorAll("[data-lt]").forEach(s => s.onchange = () => { col(); L[s.dataset.lt].tipo = s.value; draw(); });
-    box.querySelectorAll("[data-wk]").forEach(i => i.onchange = () => { col(); const c = codes[+i.dataset.wk]; if (c && !L[c]) { const m = c.match(/^[A-Z](\d{1,2})$/), st = m ? +m[1] : 8; L[c] = /^(RIP|GF|R)$/.test(c) ? { tipo: "riposo" } : { tipo: "lavoro", i: fmtHH(st), f: fmtHH((st + 7) % 24) }; } draw(); });
+    $("wkdur").onchange = () => { dur = parseFloat(String($("wkdur").value).replace(",", ".")) || 8; draw(); };
+    box.querySelectorAll("[data-wk]").forEach(i => i.onchange = () => { codes[+i.dataset.wk] = i.value.trim().toUpperCase(); draw(); });
     $("wksave").onclick = async () => {
-      col(); if (codes.some(c => !c || c === "?")) { $("wkmsg").textContent = "Completa i giorni con «?» prima di salvare."; return; }
-      // legenda: i codici nuovi restano per le prossime letture
-      SET.codici.legenda = SET.codici.legenda || [];
-      Object.entries(L).forEach(([c, x]) => { if (x.noto) return; const e = SET.codici.legenda.find(y => String(y.code).toUpperCase() === c); const v = { code: c, tipo: x.tipo, i: x.tipo === "lavoro" ? x.i : "", f: x.tipo === "lavoro" ? x.f : "" }; if (e) Object.assign(e, v); else SET.codici.legenda.push(v); });
+      const rows2 = codes.map(c => sched(c)); if (rows2.some(r => !r)) { $("wkmsg").textContent = "Completa i giorni «da controllare» prima di salvare."; return; }
+      // la regola resta per le prossime foto e griglie: numero = ora d'inizio, durata scelta
+      if (codes.some(c => /^[A-Z]\d{1,2}$/.test(c) && decode(c).kind !== "lavoro") || C.inizio) { C.inizio = true; C.durata = dur; }
+      const rip = new Set((C.riposi || []).map(x => String(x).toUpperCase())); codes.forEach((c, k) => { if (rows2[k] === "R" && RIPC.test(c)) rip.add(c); }); C.riposi = [...rip];
       try { await saveSet(); } catch (e) {}
-      const seq = codes.map(c => { const x = L[c] || {}; return x.tipo === "lavoro" ? { t: "lavoro", i: x.i, f: x.f } : { t: "riposo" }; });
-      const NOME = nome.toUpperCase(), ini = $("wkst").value || isoDay(mon), k = FIX.findIndex(f => sameP ? sameP(f.nome, NOME) : f.nome === NOME);
+      const seq = rows2.map(r => r === "R" ? { t: "riposo" } : { t: "lavoro", i: hhmm(r.i), f: hhmm(r.f) });
+      const NOME = nome.toUpperCase(), ini = $("wkst").value || isoDay(mon), k = FIX.findIndex(f => f.nome === NOME);
       const entry = { nome: NOME, gruppo: "TURNI SETTIMANALI", mode: "ciclo", sett: [], seq, inizio: ini };
       if (!$("wkrep").checked) entry.fine = isoDay(new Date(new Date(ini + "T12:00").getTime() + 6 * 864e5));
       if (k >= 0) FIX[k] = entry; else FIX.push(entry);
       await saveFix(); rebuildMonths(); renderAll();
-      box.innerHTML = `<p class="muted">✓ Turni di ${esc(nome)} salvati${$("wkrep") && entry.fine ? " per quella settimana" : ", ripetuti ogni settimana dal " + esc(new Date(ini + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "long" }))}. Li trovi nel calendario e negli incroci.</p>`;
+      box.innerHTML = `<p class="muted">✓ Turni di ${esc(nome)} salvati${entry.fine ? " per quella settimana" : ", ripetuti ogni settimana dal " + esc(new Date(ini + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "long" }))}. Li trovi nel calendario e negli incroci.</p>`;
     };
   };
   draw();
@@ -1801,7 +1805,8 @@ function openManual(target, why, ocr) {
       const r = await ocrReadPerson(S.ocrFile, nome, dim, say);
       if (!r.codes) { say(r.nome ? `Non ho trovato "${nome}" con sicurezza (il più simile: ${r.nome}). Controlla il nome o prova con una foto più dritta e nitida, oppure scrivi i codici a mano.` : "Non riesco a trovare la tabella nella foto. Prova con una foto dritta, a fuoco e con buona luce, che inquadri la griglia; oppure scrivi i codici a mano."); }
       else if (r.weekly) { say(`✓ Trovato: ${r.nome.length > 60 ? "la squadra con " + nome : r.nome}. È una griglia settimanale: controlla qui sotto.`); openWeekly(nome, r.codes, r.nome.length > 60 ? "" : r.nome); }
-      else { $("mnp").value = r.codes.join(" "); const dub = r.codes.filter(c => c === "?").length; say(`✓ Trovato: ${r.nome}. Letti ${r.codes.length} giorni${dub ? `, ${dub} da controllare (?)` : ""}. Controlla l'anteprima qui sotto: i giorni in rosso sono dubbi.`); $("mngo").disabled = false; $("mngo").click(); }
+      else { if (!SET.codici.inizio && r.codes.filter(c => /^[A-Z]\d{1,2}$/.test(c) && decode(c).kind !== "lavoro").length >= 3) { SET.codici.inizio = true; SET.codici.durata = SET.codici.durata || 8; try { saveSet(); } catch (e) {} }
+      $("mnp").value = r.codes.join(" "); const dub = r.codes.filter(c => c === "?").length; say(`✓ Trovato: ${r.nome}. Letti ${r.codes.length} giorni${dub ? `, ${dub} da controllare (?)` : ""}. Controlla l'anteprima qui sotto: i giorni in rosso sono dubbi.`); $("mngo").disabled = false; $("mngo").click(); }
     } catch (e) { console.error(e); say("Lettura non riuscita: " + (e && e.message || e) + " · " + (navigator.userAgent.match(/iPhone OS [\d_]+|Android [\d.]+|Chrome\/\d+|Version\/[\d.]+ /g) || []).join(" ")); }
     btn.disabled = false; $("mngo").disabled = false;
   };
@@ -2548,7 +2553,7 @@ function importICS(txt, showTitles) {
 const lettToStr = L => Object.entries(L || {}).map(([k, v]) => `${k}=${v}`).join(", ");
 const strToLett = t => { const o = {}; String(t || "").split(/[,;\s]+/).forEach(p => { const m = p.match(/^([A-Za-z])\s*=\s*(\d+(?:[.,]\d+)?)$/); if (m) o[m[1].toUpperCase()] = parseFloat(m[2].replace(",", ".")); }); return o; };
 function codiciHtml(C) {
-  return `<div class="ovtypes"><span class="chip ${C.formula !== false ? "sel" : ""}" data-cf="1">Formula (lettera e numero)</span><span class="chip ${C.formula === false ? "sel" : ""}" data-cf="0">Solo legenda / orari scritti</span></div>
+  return `<div class="ovtypes"><span class="chip ${C.formula !== false ? "sel" : ""}" data-cf="1">Lettera = ore, numero ÷ 2 = inizio (F30)</span><span class="chip ${C.formula === false && C.inizio ? "sel" : ""}" data-cf="s">Numero = ora d'inizio (M7, P14, N23)</span><span class="chip ${C.formula === false && !C.inizio ? "sel" : ""}" data-cf="0">Solo legenda / orari scritti</span></div>${C.inizio ? `<div class="fgrid"><div><label>Durata del turno (ore)</label><input id="cxdur" inputmode="decimal" value="${esc(String(C.durata || 8))}"></div><div class="muted" style="font-size:12px;align-self:end">Es. M7 = ${hhmm(7)}–${hhmm(7 + (+C.durata || 8))}, N23 = ${hhmm(23)}–${hhmm(23 + (+C.durata || 8))}</div></div>` : ""}
     ${C.formula !== false ? `<div class="fgrid"><div class="full"><label>Lettera = ore di durata</label><input id="cxl" value="${esc(lettToStr(C.lettere))}" placeholder="D=4, E=5, F=6, H=8"></div>
       <div class="full"><label>Il numero diviso per … dà l'ora di inizio</label><input id="cxd" inputmode="decimal" value="${esc(String(C.div || 2))}"></div></div>
       <p class="muted" style="font-size:12px">Esempio con questi valori: ${(() => { const L = C.lettere || {}; const k = L.F != null ? "F" : Object.keys(L)[0]; if (!k) return "—"; const n = Math.round(15 * (+C.div || 2)); const st = n / (+C.div || 2); return `${k}${n} = ${hhmm(st)}–${hhmm(st + +L[k])}`; })()}</p>` : ""}
@@ -2563,8 +2568,9 @@ function bindCodici(box, C, redraw) {
     box.querySelectorAll("[data-lt]").forEach(i => C.legenda[+i.dataset.lt].tipo = i.value);
     box.querySelectorAll("[data-li]").forEach(i => C.legenda[+i.dataset.li].i = i.value);
     box.querySelectorAll("[data-lf]").forEach(i => C.legenda[+i.dataset.lf].f = i.value);
+    if (box.querySelector("#cxdur")) C.durata = parseFloat(String(box.querySelector("#cxdur").value).replace(",", ".")) || 8;
     if (box.querySelector("#cxr")) C.riposi = box.querySelector("#cxr").value.split(/[,;\s]+/).map(x => x.trim().toUpperCase()).filter(Boolean); };
-  box.querySelectorAll("[data-cf]").forEach(c => c.onclick = () => { col(); C.formula = c.dataset.cf === "1"; redraw(); });
+  box.querySelectorAll("[data-cf]").forEach(c => c.onclick = () => { col(); C.formula = c.dataset.cf === "1"; C.inizio = c.dataset.cf === "s" ? true : c.dataset.cf === "1" ? !!C.inizio : false; if (C.inizio && !C.durata) C.durata = 8; redraw(); });
   box.querySelectorAll("[data-lt]").forEach(c => c.onchange = () => { col(); redraw(); });
   box.querySelectorAll("[data-lx]").forEach(c => c.onclick = () => { col(); C.legenda.splice(+c.dataset.lx, 1); redraw(); });
   if (box.querySelector("#cxadd")) box.querySelector("#cxadd").onclick = () => { col(); C.legenda.push({ code: "", tipo: "lavoro", i: "", f: "" }); redraw(); };
