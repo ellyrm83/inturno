@@ -2731,6 +2731,7 @@ const needWizard = () => { try { return !SET.onboarded && !localStorage.getItem(
 { let wt = 0; const wtry = () => { wt++; if (document.body.classList.contains("locked") || S.previewing) { if (wt < 600) setTimeout(wtry, 1000); return; } if (needWizard() && !S.touched && !(window.W && W)) openWizard(); else renderProf(); }; setTimeout(wtry, 1800); }
 
 
+try { const mn = $("main"), up = $("upcard"), sw = mn && mn.querySelector(".modesw"); if (mn && up && sw) sw.after(up); } catch (e) {}
 document.querySelectorAll("#upkind [data-uk]").forEach(c => c.onclick = () => {
   const k = c.dataset.uk; document.querySelectorAll("#upkind [data-uk]").forEach(x => x.classList.toggle("sel", x === c));
   if (k === "fisso") { $("uplab").textContent = "Importa griglia"; $("uphint").textContent = "Orario uguale ogni settimana o ciclo che si ripete (es. 2 mattine, 2 pomeriggi, 2 notti, 2 riposi): lo imposti una volta e vale per tutti i mesi."; $("fixbtn").click(); return; }
