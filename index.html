@@ -1292,6 +1292,36 @@ function openWaVar(name, autoPick) {
   if (autoPick) setTimeout(() => $("waimg").click(), 50);
 }
 
+// ---------- un singolo appuntamento nel calendario del telefono ----------
+function calPad(n) { return String(n).padStart(2, "0"); }
+function calIcs(ev) { // ev: { titolo, data: Date, inizio (ore decimali) | null, fine | null, giorni, nota }
+  const d = ev.data, ymd = x => `${x.getFullYear()}${calPad(x.getMonth() + 1)}${calPad(x.getDate())}`;
+  const at = h => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setMinutes(Math.round(h * 60)); return `${ymd(x)}T${calPad(x.getHours())}${calPad(x.getMinutes())}00`; };
+  const esc2 = t => String(t || "").replace(/\\/g, "\\\\").replace(/[;,]/g, x => "\\" + x).replace(/\n/g, "\\n");
+  const st = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z", uid = "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + "@inturno";
+  let when;
+  if (ev.inizio == null) { const e = new Date(d.getFullYear(), d.getMonth(), d.getDate() + (ev.giorni || 1)); when = [`DTSTART;VALUE=DATE:${ymd(d)}`, `DTEND;VALUE=DATE:${ymd(e)}`]; }
+  else when = [`DTSTART:${at(ev.inizio)}`, `DTEND:${at(ev.fine != null ? ev.fine : ev.inizio + 2)}`];
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//InTurno//IT", "METHOD:PUBLISH", "BEGIN:VEVENT", `UID:${uid}`, `DTSTAMP:${st}`, ...when, `SUMMARY:${esc2(ev.titolo)}`, ev.nota ? `DESCRIPTION:${esc2(ev.nota)}` : "", "BEGIN:VALARM", "TRIGGER:-PT2H", "ACTION:DISPLAY", `DESCRIPTION:${esc2(ev.titolo)}`, "END:VALARM", "END:VEVENT", "END:VCALENDAR"].filter(Boolean).join("\r\n") + "\r\n";
+}
+function calGoogle(ev) {
+  const d = ev.data, ymd = x => `${x.getFullYear()}${calPad(x.getMonth() + 1)}${calPad(x.getDate())}`;
+  const at = h => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setMinutes(Math.round(h * 60)); return `${ymd(x)}T${calPad(x.getHours())}${calPad(x.getMinutes())}00`; };
+  const dates = ev.inizio == null ? `${ymd(d)}/${ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() + (ev.giorni || 1)))}` : `${at(ev.inizio)}/${at(ev.fine != null ? ev.fine : ev.inizio + 2)}`;
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent(ev.titolo) + "&dates=" + dates + "&ctz=Europe/Rome" + (ev.nota ? "&details=" + encodeURIComponent(ev.nota) : "");
+}
+const CALEV = [];
+function calBtns(ev, cls) { const k = CALEV.push(ev) - 1; return `<button class="${cls || "mini"}" data-calev="${k}">📅 Calendario</button><a class="mini" href="${esc(calGoogle(ev))}" target="_blank" rel="noopener" title="Google Calendar">G</a>`; }
+async function calSave(ev) {
+  const data = calIcs(ev), name = "InTurno-" + String(ev.titolo || "evento").replace(/[^\wàèéìòù -]/gi, "").trim().replace(/\s+/g, "-").slice(0, 40) + ".ics";
+  let dl = null; try { const CL = window.__inturno || window.claude; dl = CL && await CL.use("downloads"); } catch (e) {}
+  if (dl) { try { await dl.save({ filename: name, data }); return; } catch (e) { if (e && e.code === "declined") return; } }
+  const a = document.createElement("a"); a.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(data); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-calev]"); if (!b) return; e.preventDefault(); const ev = CALEV[+b.dataset.calev]; if (ev) calSave(ev).then(() => { b.textContent = "📅 Aggiunto ✓"; }).catch(() => {}); });
+// "dalle 20:30 alle 23:00" → ore decimali
+function calWhen(txt, def) { const t = [...String(txt || "").matchAll(/(\d{1,2}):(\d{2})/g)].map(x => +x[1] + +x[2] / 60); return t.length ? { inizio: t[0], fine: t[1] != null ? t[1] : t[0] + (def || 2.5) } : null; }
+
 // ================= ORGANIZZA USCITA =================
 const OUT = {
   colazione: { what: "la colazione", label: "☕ Colazione", win: [7.5, 10.5], need: 1.5 },
@@ -1367,15 +1397,16 @@ function renderOut(boxArg, minP) {
   const chips = r => `<div class="pp">${r.ppl.map(p => `<span class="pc"><b>${esc(p.n)}</b> ${esc(p.t)}</span>`).join("")}${r.edge ? `<span class="pc warn">giorno dopo nel mese successivo: verifica</span>` : ""}</div>`;
   const invite = r => ok.length < 2 ? `${o.label.replace(/^\S+\s/, "").replace(/\s*\(.*\)$/, "")} ${lab(r)}${o.full ? "" : ", " + r.when}? Io sono libera, ci sei? 😊` : `${o.label.replace(/^\S+\s/, "").replace(/\s*\(.*\)$/, "")} ${lab(r)}${o.full ? "" : ", " + r.when}? Siamo tutte libere (${who}). Chi c'è? 😊`;
   const invites = res.map(invite);
+  const calOf = r => { const d = new Date(m.year, m.month - 1, r.i + 1), t = o.full ? null : calWhen(r.when, o.rule ? 2.5 : o.need || 2); return { titolo: o.label.replace(/^\S+\s/, "").replace(/\s*\(.*\)$/, "") + (ok.length > 1 ? " con " + ok.slice(1).map(([n]) => nome1(n)).join(", ") : ""), data: d, inizio: t ? t.inizio : null, fine: t ? t.fine : null, giorni: o.full || 1, nota: "Organizzato con InTurno" }; };
   let h = "";
   if (!res.length) h += `<div class="best none"><b>Nessuna data libera per tutte</b><div class="muted">${esc(who)} · ${esc(monthLabel(m))}</div></div>`;
   else {
     const b0 = res[0];
     h += `<div class="best"><div class="lbl">⭐ Il giorno migliore</div><h3>${esc(lab(b0))}</h3>${b0.pay ? `<span class="pill">💰 dopo la paga</span>` : ""}<div class="t">${esc(b0.when)}</div>${chips(b0)}
-      <div class="stbtn">${wa(invites[0], "btn wa", "🟢 Invita su WhatsApp")}<button class="btn ghost" data-cp="0">Copia</button></div></div>`;
+      <div class="stbtn">${wa(invites[0], "btn wa", "🟢 Invita su WhatsApp")}${calBtns(calOf(b0), "btn ghost")}<button class="btn ghost" data-cp="0">Copia</button></div></div>`;
     const rest = res.slice(1);
     if (rest.length) {
-      const row = (r, k) => `<details class="drow"><summary><span><b>${esc(lab(r))}</b>${r.we ? ' <span class="pill">weekend</span>' : ""}</span><span class="t">${esc(r.when)}</span></summary>${chips(r)}<span class="stbtn">${wa(invites[k])}<button class="mini" data-cp="${k}">Copia</button></span></details>`;
+      const row = (r, k) => `<details class="drow"><summary><span><b>${esc(lab(r))}</b>${r.we ? ' <span class="pill">weekend</span>' : ""}</span><span class="t">${esc(r.when)}</span></summary>${chips(r)}<span class="stbtn">${wa(invites[k])}${calBtns(calOf(r))}<button class="mini" data-cp="${k}">Copia</button></span></details>`;
       h += `<div class="sec">Altre date (${rest.length})</div>` + rest.slice(0, 4).map((r, k) => row(r, k + 1)).join("");
       if (rest.length > 4) h += `<details class="more"><summary>Mostra le altre ${rest.length - 4}</summary>${rest.slice(4).map((r, k) => row(r, k + 5)).join("")}</details>`;
     }
@@ -2016,7 +2047,7 @@ function renderAg() {
     <div id="agday"></div>`;
   // prossimi eventi del mese
   const mev = evs.filter(e => e.data && e.data.startsWith(`${m.year}-${String(m.month).padStart(2, "0")}`)).sort((a, b) => (a.data + (a.ora || "")).localeCompare(b.data + (b.ora || "")));
-  h += `<div class="sec">📌 Eventi di ${esc(MESI[m.month - 1])}</div>` + (mev.length ? mev.map(e => `<div class="req evrow"><span><b>${esc(e.titolo)}</b><br><span class="muted">${esc(new Date(e.data + "T12:00").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" }))}${e.ora ? " · " + esc(e.ora) : ""} · ${e.priv ? "solo io" : esc(e.gname)}</span></span><span class="stbtn">${wa(evText(e))}<button class="mini" data-evdel="${esc(e.id)}" data-evg="${esc(e.gid || "")}">✕</button></span></div>`).join("") : `<p class="muted">Nessun evento. Tocca un giorno per organizzare.</p>`);
+  h += `<div class="sec">📌 Eventi di ${esc(MESI[m.month - 1])}</div>` + (mev.length ? mev.map(e => `<div class="req evrow"><span><b>${esc(e.titolo)}</b><br><span class="muted">${esc(new Date(e.data + "T12:00").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" }))}${e.ora ? " · " + esc(e.ora) : ""} · ${e.priv ? "solo io" : esc(e.gname)}</span></span><span class="stbtn">${wa(evText(e))}${calBtns({ titolo: e.titolo.replace(/^\S+\s/, ""), data: new Date(e.data + "T12:00"), inizio: e.ora && /^\d{1,2}:\d{2}$/.test(e.ora) ? tHm(e.ora) : null, fine: e.ora && /^\d{1,2}:\d{2}$/.test(e.ora) ? tHm(e.ora) + 2.5 : null, giorni: e.giorni || 1, nota: e.priv ? "" : "Con " + (e.gname || "") })}<button class="mini" data-evdel="${esc(e.id)}" data-evg="${esc(e.gid || "")}">✕</button></span></div>`).join("") : `<p class="muted">Nessun evento. Tocca un giorno per organizzare.</p>`);
   out.innerHTML = h;
   bindAgChips(out);
   $("plv").onclick = () => openPlan("viaggio"); $("plg").onclick = () => openPlan("gita"); $("plu").onclick = () => { AG.plan = { kind: "uscita", tipo: AG.plan && AG.plan.tipo || S.outType || "cena" }; drawPlan(); };

@@ -66,6 +66,12 @@
       const type = /\.ics$/i.test(filename) ? "text/calendar" : /\.csv$/i.test(filename) ? "text/csv" : "application/octet-stream";
       const blob = data instanceof Blob ? data : new Blob([data], { type });
       const file = new File([blob], filename, { type });
+      // iPhone: il file calendario si apre direttamente in Calendario («Aggiungi tutti»)
+      if (type === "text/calendar" && /iphone|ipad|macintosh/i.test(navigator.userAgent) && "ontouchend" in document && navigator.serviceWorker && navigator.serviceWorker.controller) {
+        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); const text = typeof data === "string" ? data : await blob.text();
+        const ok = await new Promise(res => { const ch = new MessageChannel(); const t = setTimeout(() => res(false), 1500); ch.port1.onmessage = () => { clearTimeout(t); res(true); }; navigator.serviceWorker.controller.postMessage({ type: "ics", id, data: text }, [ch.port2]); });
+        if (ok) { location.href = "cal.ics?id=" + id; return { status: "saved" }; }
+      }
       if (navigator.canShare && navigator.canShare({ files: [file] }) && /iphone|ipad|android/i.test(navigator.userAgent)) {
         try { await navigator.share({ files: [file], title: filename }); return { status: "saved" }; } catch (e) { if (e && e.name === "AbortError") throw { code: "declined", message: "annullato" }; }
       }
