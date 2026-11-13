@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function ownerDoc() { return /databases/$(database)/documents/config/owner; }
+    function isOwner() { return signed() && exists(ownerDoc()) && get(ownerDoc()).data.uid == me(); }
+    function approved() { return isOwner() || (signed() && exists(/databases/$(database)/documents/approvati/$(me()))); }
+    function invito(c) { return /databases/$(database)/documents/inviti/$(c); }
+
+    // proprietaria: la prima persona che entra
+    match /config/owner {
+      allow read: if signed();
+      allow create: if signed() && !exists(ownerDoc()) && request.resource.data.uid == me();
+    }
+
+    // richieste di accesso: ognuna scrive la propria, la proprietaria le vede tutte
+    match /richieste/{uid} {
+      allow read: if isOwner() || (signed() && me() == uid);
+      allow create, update: if (signed() && me() == uid) || isOwner();
+      allow delete: if isOwner();
+    }
+
+    // approvazioni: la proprietaria, oppure chi usa un codice invito valido
+    // (nello stesso salvataggio il codice viene segnato come usato da quella persona)
+    match /approvati/{uid} {
+      allow read: if isOwner() || (signed() && me() == uid);
+      allow write: if isOwner();
+      allow create: if signed() && me() == uid
+        && request.resource.data.invito is string
+        && exists(invito(request.resource.data.invito))
+        && get(invito(request.resource.data.invito)).data.usatoDa == null
+        && getAfter(invito(request.resource.data.invito)).data.usatoDa == uid;
+    }
+
+    // codici invito monouso: li crea e li vede tutti solo la proprietaria
+    match /inviti/{code} {
+      allow get: if signed();
+      allow list, delete: if isOwner();
+      allow create: if isOwner() && request.resource.data.usatoDa == null && request.resource.data.scade is number;
+      allow update: if signed()
+        && resource.data.usatoDa == null
+        && request.time.toMillis() < resource.data.scade
+        && request.resource.data.usatoDa == me()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usatoDa', 'usatoIl', 'nomeUsato'])
+        && existsAfter(/databases/$(database)/documents/approvati/$(me()));
+    }
+
+    // elenco nomi (solo il nome): serve per invitare le persone nei gruppi
+    match /condivisi/{uid} {
+      allow read: if approved();
+      allow create, update: if approved() && me() == uid && request.resource.data.keys().hasOnly(['nome', 'aggiornato']);
+      allow delete: if signed() && me() == uid;
+    }
+
+    // gruppi: li vedono solo membri e invitati
+    match /gruppi/{gid} {
+      function membri() { return resource.data.get('membri', []); }
+      function invitati() { return resource.data.get('invitati', []); }
+      function isMember() { return me() in membri(); }
+      function isInvited() { return me() in invitati(); }
+      function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+      allow read: if approved() && (isMember() || isInvited());
+      allow create: if approved() && request.resource.data.creatore == me() && request.resource.data.membri == [me()];
+      allow update: if approved() && (
+        // i membri modificano nome, inviti ed eventi, ma non la lista dei membri
+        (isMember() && !changed().hasAny(['membri', 'creatore']))
+        // uscire dal gruppo: si toglie solo se stesse
+        || (isMember() && changed().hasOnly(['membri'])
+            && request.resource.data.membri.toSet() == membri().toSet().difference([me()].toSet()))
+        // accettare un invito
+        || (isInvited() && changed().hasOnly(['membri', 'invitati'])
+            && request.resource.data.membri.toSet() == membri().toSet().union([me()].toSet())
+            && request.resource.data.invitati.toSet() == invitati().toSet().difference([me()].toSet()))
+        // rifiutare un invito
+        || (isInvited() && changed().hasOnly(['invitati'])
+            && request.resource.data.invitati.toSet() == invitati().toSet().difference([me()].toSet()))
+      );
+
+      // turni e statini condivisi con QUESTO gruppo: li leggono solo i suoi membri
+      match /dati/{uid} {
+        function memberOfGroup() { return me() in get(/databases/$(database)/documents/gruppi/$(gid)).data.get('membri', []); }
+        allow read: if approved() && memberOfGroup();
+        allow create, update: if approved() && me() == uid && memberOfGroup();
+        allow delete: if signed() && me() == uid;
+      }
+    }
+
+    // dati personali: solo la persona stessa
+    match /data/users/{uid}/{doc} {
+      allow read, write: if signed() && me() == uid;
+    }
+  }
+}
