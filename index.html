@@ -1846,10 +1846,13 @@ function openRotation(nome, all, meIdx) {
   const C = SET.codici; let dur = +C.durata || 8, N = all.length, my = meIdx, dir = "next", ini = isoDay(mon);
   const RIPC = /^(RIP|GF|R|R1|R2|RIPOSO|FR|RF)$/;
   const sched = c => { if (!c || c === "?") return null; const d = decode(c); if (d.kind === "lavoro") return { i: d.start, f: d.end }; if (d.kind === "riposo" || d.kind === "ferie" || RIPC.test(c)) return "R"; const m = c.match(/^[A-Z](\d{1,2})$/); return m && +m[1] < 24 ? { i: +m[1], f: +m[1] + dur } : null; };
+  if (!all || !all.length) { all = []; for (let k = 0; k < 9; k++) all.push({ name: "", codes: ["", "", "", "", "", "", ""] }); }
+  const NM = all.every(r => !r.name);
   const short = n => String(n || "").replace(/[^A-Za-zÀ-ú' -]/g, " ").split(/[-\s]+/).filter(w => w.length > 2).slice(0, 2).join(" · ");
+  let drawing = false;
   const draw = () => {
-    box.innerHTML = `<div class="ovbox"><b>🔁 Rotazione a squadre</b><p class="muted" style="font-size:13px">Ho letto ${all.length} righe: ogni riga è una settimana e la tabella si ripete in cerchio. Controlla i codici (tocca per correggere), poi dimmi dove si trova ${esc(nome)} questa settimana.</p>
-      <div class="rotg">${all.slice(0, N).map((r, k) => `<div class="rotr ${k === my ? "me" : ""}"><b>${k + 1}</b><span class="rotn">${esc(short(r.name)) || "riga " + (k + 1)}</span>${r.codes.map((c, j) => { const x = sched(c); return `<input data-rc="${k}_${j}" value="${esc(c)}" class="${!x ? "bad" : x === "R" ? "rip" : ""}" title="${DN[j]}">`; }).join("")}</div>`).join("")}</div>
+    if (drawing) return; drawing = true; try { box.innerHTML = `<div class="ovbox"><b>🔁 Rotazione a squadre</b><p class="muted" style="font-size:13px">${NM ? `Scrivi i codici della rotazione: ogni riga è una settimana (da lunedì a domenica) e la tabella si ripete in cerchio. Imposta prima quante settimane ha la rotazione. Riposo: RIP, festivo: GF.` : `Ho letto ${all.length} righe: ogni riga è una settimana e la tabella si ripete in cerchio. Controlla i codici (tocca per correggere), poi dimmi dove si trova ${esc(nome)} questa settimana.`}</p>
+      <div class="rotg">${all.slice(0, N).map((r, k) => `<div class="rotr ${k === my ? "me" : ""}"><b>${k + 1}</b><span class="rotn">${esc(short(r.name)) || "riga " + (k + 1)}</span>${r.codes.map((c, j) => { const x = sched(c); return `<input data-rc="${k}_${j}" value="${esc(c)}" placeholder="${DN[j]}" class="${!x ? (c ? "bad" : "") : x === "R" ? "rip" : ""}" title="${DN[j]}">`; }).join("")}</div>`).join("")}</div>
       <div class="fgrid" style="margin-top:8px">
         <div><label>Settimane della rotazione</label><input id="rtn" inputmode="numeric" value="${N}"></div>
         <div><label>Durata del turno (ore)</label><input id="rtdur" inputmode="decimal" value="${esc(String(dur))}"></div>
@@ -1858,17 +1861,17 @@ function openRotation(nome, all, meIdx) {
         <div class="full"><label>La settimana dopo passa alla riga</label><select id="rtdir" style="width:100%"><option value="next" ${dir === "next" ? "selected" : ""}>successiva (1 → 2 → … → ${N} → 1)</option><option value="prev" ${dir === "prev" ? "selected" : ""}>precedente (${N} → … → 2 → 1 → ${N})</option></select></div>
       </div>
       <p class="muted" style="font-size:12px">Esempio: settimana prossima ${esc(nome)} farà la riga ${dir === "next" ? (my + 1) % N + 1 : (my - 1 + N) % N + 1}: ${esc((all[dir === "next" ? (my + 1) % N : (my - 1 + N) % N] || { codes: [] }).codes.join(" "))}</p>
-      <div class="stbtn"><button class="btn" id="rtsave">Salva la rotazione di ${esc(nome)}</button></div><p class="muted" id="rtmsg"></p></div>`;
+      <div class="stbtn"><button class="btn" id="rtsave">Salva la rotazione di ${esc(nome)}</button></div><p class="muted" id="rtmsg"></p></div>`; } finally { drawing = false; }
     const col = () => { box.querySelectorAll("[data-rc]").forEach(i => { const [k, j] = i.dataset.rc.split("_").map(Number); all[k].codes[j] = i.value.trim().toUpperCase(); }); };
-    box.querySelectorAll("[data-rc]").forEach(i => i.onchange = () => { col(); draw(); });
-    $("rtn").onchange = () => { col(); N = Math.max(1, Math.min(all.length, parseInt($("rtn").value) || all.length)); if (my >= N) my = 0; draw(); };
+    box.querySelectorAll("[data-rc]").forEach(i => i.oninput = i.onchange = () => { i.value = i.value.toUpperCase(); col(); const x = sched(i.value.trim()); i.className = !x ? (i.value.trim() ? "bad" : "") : x === "R" ? "rip" : ""; });
+    $("rtn").onchange = () => { col(); N = Math.max(1, Math.min(20, parseInt($("rtn").value) || all.length)); while (all.length < N) all.push({ name: "", codes: ["", "", "", "", "", "", ""] }); if (my >= N) my = 0; draw(); };
     $("rtdur").onchange = () => { col(); dur = parseFloat(String($("rtdur").value).replace(",", ".")) || 8; draw(); };
     $("rtst").onchange = () => { ini = $("rtst").value || ini; };
     $("rtme").onchange = () => { col(); my = +$("rtme").value; draw(); };
     $("rtdir").onchange = () => { col(); dir = $("rtdir").value; draw(); };
     $("rtsave").onclick = async () => {
       col(); const rows = all.slice(0, N), bad = rows.reduce((n, r) => n + r.codes.filter(c => !sched(c)).length, 0);
-      if (bad) { $("rtmsg").textContent = `Ci sono ${bad} codici in rosso da correggere prima di salvare.`; return; }
+      if (bad) { $("rtmsg").textContent = `Ci sono ${bad} caselle vuote o in rosso da sistemare prima di salvare.`; return; }
       if (rows.some(r => r.codes.some(c => /^[A-Z]\d{1,2}$/.test(c) && decode(c).kind !== "lavoro")) || C.inizio) { C.inizio = true; C.durata = dur; }
       const rip = new Set((C.riposi || []).map(x => String(x).toUpperCase())); rows.forEach(r => r.codes.forEach(c => { if (RIPC.test(c)) rip.add(c); })); C.riposi = [...rip];
       try { await saveSet(); } catch (e) {}
@@ -1889,16 +1892,23 @@ function openManual(target, why, ocr) {
   const box = $("xpanel");
   let sec = null; for (const sh of S.sheets) if (P.name && [...sh.people.keys()].some(n => matchName(P.name, n))) sec = sh;
   box.innerHTML = `<div class="ovbox"><b>✍️ Inserisci i turni a mano</b>${why ? `<p class="err">${why}</p>` : ""}
-    ${S.ocrFile ? `<p class="muted">📷 <b>${esc(S.ocrFile.name || "Foto")}</b>: scegli il mese, scrivi il nome come compare nella griglia e tocca <b>Leggi dalla foto</b>. La lettura avviene sul telefono (la foto non viene inviata a nessuno); poi controlli giorno per giorno.</p>` : `<p class="muted">Per scansioni, foto o griglie che non si leggono da sole. Scegli il mese, poi scrivi i codici giorno per giorno oppure incollali tutti in fila.</p>`}
+    ${S.ocrFile ? `<div class="lbl" style="margin-top:4px">Che cos'è questa foto?</div><div class="chips" id="mnkind"><span class="chip ${S.ocrKind !== "rot" ? "sel" : ""}" data-mk="mese">📅 Turni del mese</span><span class="chip ${S.ocrKind === "rot" ? "sel" : ""}" data-mk="rot">🔁 Rotazione a settimane</span></div><p class="muted">📷 <b>${esc(S.ocrFile.name || "Foto")}</b>: scegli il mese, scrivi il nome come compare nella griglia e tocca <b>Leggi dalla foto</b>. La lettura avviene sul telefono (la foto non viene inviata a nessuno); poi controlli giorno per giorno.</p>` : `<p class="muted">Per scansioni, foto o griglie che non si leggono da sole. Scegli il mese, poi scrivi i codici giorno per giorno oppure incollali tutti in fila.</p>`}
     <div class="row"><span class="muted">Mese:</span>${monthSelects("mnm", "mny", target ? +target.slice(4) : null, target ? +target.slice(0, 4) : null)}</div>
     <div class="fgrid"><div class="full"><label>Nome</label><input id="mnn" value="${esc(P.name || "")}" placeholder="es. ROSSI, MARIO"></div>
     <div class="full"><label>Codici in ordine dal giorno 1 (facoltativo, separati da spazio)</label><textarea id="mnp" rows="3" placeholder="F30 F30 R1 R2 F16 …"></textarea></div></div>
-    <div class="stbtn" style="margin-top:8px">${S.ocrFile ? `<button class="btn" id="mnocr">🔎 Leggi dalla foto</button>` : ""}<button class="btn ${S.ocrFile ? "ghost" : ""}" id="mngo">Continua</button><button class="btn ghost" id="mnx">Annulla</button></div><p class="muted" id="mnocrmsg" style="font-size:13px"></p><div id="aiout"></div></div>`;
+    <div class="stbtn" style="margin-top:8px">${S.ocrFile ? `<button class="btn" id="mnocr">🔎 Leggi dalla foto</button>` : ""}<button class="btn ghost" id="mnrot">🔁 Rotazione a mano</button><button class="btn ${S.ocrFile ? "ghost" : ""}" id="mngo">Continua</button><button class="btn ghost" id="mnx">Annulla</button></div><p class="muted" id="mnocrmsg" style="font-size:13px"></p><div id="aiout"></div></div>`;
+  document.querySelectorAll("#mnkind [data-mk]").forEach(c => c.onclick = () => { S.ocrKind = c.dataset.mk; document.querySelectorAll("#mnkind [data-mk]").forEach(x => x.classList.toggle("sel", x === c)); });
+  if ($("mnrot")) $("mnrot").onclick = () => { const nome = $("mnn").value.trim() || P.name || "io"; openRotation(nome, [], 0); const o = $("aiout"); if (o) o.scrollIntoView({ behavior: "smooth", block: "start" }); };
   if ($("mnocr")) $("mnocr").onclick = async () => {
     const nome = $("mnn").value.trim(); if (nome.length < 3) { $("mnn").focus(); $("mnocrmsg").textContent = "Scrivi prima il nome come compare nella griglia."; return; }
     const M = +$("mnm").value, Y = +$("mny").value, dim = new Date(Y, M, 0).getDate(), btn = $("mnocr"), say = t => { const e = $("mnocrmsg"); if (e) e.textContent = t; };
     btn.disabled = true; $("mngo").disabled = true;
     try {
+      if (S.ocrKind === "rot") {
+        say("Leggo tutte le righe della rotazione…"); let all = []; try { all = await ocrReadAll(S.ocrFile, say); } catch (e) { all = []; }
+        let me = 0, bs = -1; all.forEach((x, i) => { const sc = ocrNameScore(nome, x.name); if (sc > bs) { bs = sc; me = i; } });
+        say(all.length ? `✓ Lette ${all.length} righe. Controlla i codici e scegli la riga di ${nome} di questa settimana.` : "Non sono riuscita a leggere le righe: scrivile qui sotto a mano."); openRotation(nome, all, all.length ? me : 0);
+        btn.disabled = false; $("mngo").disabled = false; return; }
       const r = await ocrReadPerson(S.ocrFile, nome, dim, say);
       if (!r.codes) { say(r.nome ? `Non ho trovato "${nome}" con sicurezza (il più simile: ${r.nome}). Controlla il nome o prova con una foto più dritta e nitida, oppure scrivi i codici a mano.` : "Non riesco a trovare la tabella nella foto. Prova con una foto dritta, a fuoco e con buona luce, che inquadri la griglia; oppure scrivi i codici a mano."); }
       else if (r.weekly) {
@@ -1965,6 +1975,7 @@ const toCode = v => { if (v == null) return ""; v = String(v).trim().toUpperCase
   if (v === "?" ) return ""; return v; };
 const fromCode = c => c && c[0] === "@" ? c.slice(1) : (c || "");
 function openAI(f, target) {
+  if (!ST.sample) { const nm = $("ainames") ? $("ainames").value : ""; $("xpanel").innerHTML = ""; S.ocrFile = f; openManual(target || null, null, true); if (nm && $("mnn")) $("mnn").value = nm; const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   const box = $("xpanel");
   const draw = (msg) => {
     box.innerHTML = `<div class="ovbox"><b>📷 Turni da ${esc(f.name || "foto")}</b>
@@ -2781,7 +2792,7 @@ const needWizard = () => { try { return !SET.onboarded && !localStorage.getItem(
 
 try { const mn = $("main"), up = $("upcard"), sw = mn && mn.querySelector(".modesw"); if (mn && up && sw) sw.after(up); } catch (e) {}
 document.querySelectorAll("#upkind [data-uk]").forEach(c => c.onclick = () => {
-  const k = c.dataset.uk; document.querySelectorAll("#upkind [data-uk]").forEach(x => x.classList.toggle("sel", x === c));
+  const k = c.dataset.uk; S.ocrKind = k === "squadre" ? "rot" : "mese"; document.querySelectorAll("#upkind [data-uk]").forEach(x => x.classList.toggle("sel", x === c));
   if (k === "fisso") { $("uplab").textContent = "Importa griglia"; $("uphint").textContent = "Orario uguale ogni settimana o ciclo che si ripete (es. 2 mattine, 2 pomeriggi, 2 notti, 2 riposi): lo imposti una volta e vale per tutti i mesi."; $("fixbtn").click(); return; }
   if (k === "squadre") { $("uplab").textContent = "📷 Carica la tabella delle squadre"; $("uphint").textContent = "Foto o screenshot della tabella settimanale (squadre × lunedì…domenica): trovo la tua riga, ti chiedo la durata del turno e se ogni settimana si passa alla riga successiva."; }
   else { $("uplab").textContent = "Importa griglia"; $("uphint").textContent = "PDF, Excel, CSV, foto o scansione. Vedi sempre un'anteprima prima di salvare."; }
