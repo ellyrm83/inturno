@@ -164,6 +164,7 @@ a.wa{text-decoration:none;display:inline-flex;align-items:center;justify-content
 .usrow{grid-template-columns:1fr;gap:4px;border-bottom:1px solid var(--line);padding:6px 0}.usrow label{display:flex;align-items:center;gap:6px}.usrow input,.usrow select{font:inherit;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px}
 .impdot{display:block;width:6px;height:6px;border-radius:50%;background:#e86a92;margin:1px auto 0}
 .localbar{background:var(--sun);border-radius:14px;padding:8px 12px;font-size:12px;margin-bottom:12px;color:#5d4a10}
+.invcard{border:1.5px solid var(--line,#e6e1f5);border-radius:16px;padding:10px 12px;margin:8px 0;background:#fff}.invcard.new{border-color:#7a68d4;box-shadow:0 0 0 3px #e9e2ff}.invcode{font-family:ui-monospace,monospace;font-size:20px;font-weight:700;letter-spacing:2px;background:#e9e2ff;border-radius:10px;padding:4px 8px;white-space:nowrap}.invmsg{white-space:pre-wrap;font-size:13px;background:#f6f4fb;border-radius:12px;padding:8px 10px;margin-top:8px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
 .stat{background:var(--lav);border-radius:14px;padding:8px;text-align:center}.stat b{display:block;font-size:20px}.stat span{font-size:11px;color:var(--mut)}
 .cal{width:100%;border-collapse:separate;border-spacing:4px;table-layout:fixed}
@@ -1845,7 +1846,7 @@ async function renderCC() {
   const acc = u => ps[u] && ps[u].name ? ` <span class="muted">(${esc(ps[u].name)})</span>` : "";
   let h = `<h2>👥 Gruppi</h2>`;
   // inviti
-  if (invites.length) h += invites.map(([g, d]) => `<div class="invite" style="background:${gColor(g)}"><span>💌 Ti hanno invitata nel gruppo <b>${esc(d.nome)}</b></span><span><button class="mini" data-acc="${g}">Entra</button> <button class="mini" data-dec="${g}">No grazie</button></span></div>`).join("");
+  if (invites.length) h += invites.map(([g, d]) => `<div class="invite" style="background:${gColor(g)}"><span>💌 Hai un invito nel gruppo <b>${esc(d.nome)}</b></span><span><button class="mini" data-acc="${g}">Entra</button> <button class="mini" data-dec="${g}">No grazie</button></span></div>`).join("");
   // selettore gruppi
   const gchip = g => `<span class="gchip ${CC.sel === g ? "on" : ""}" data-g="${g}" style="background:${gColor(g)}">${esc(CC.groups.get(g).nome)} <b>${groupMembers(g).length + 1 + (GUEST[g] || []).length}</b></span>`;
   h += `<div class="gcats">${Object.entries({ lavoro: "💼 Colleghi", famiglia: "🏡 Famiglia", amici: "🎉 Amici" }).map(([t, lab]) => {
@@ -2637,7 +2638,11 @@ const fmtCode = c => String(c).slice(0, 3) + "-" + String(c).slice(3);
 const normCode = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const fmtScad = ms => new Date(ms).toLocaleString("it-IT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 let URL_CODE = ""; try { URL_CODE = normCode(new URLSearchParams(location.search).get("invito")); if (URL_CODE) sessionStorage.setItem("turni.invito", URL_CODE); else URL_CODE = sessionStorage.getItem("turni.invito") || ""; } catch {}
-const invMsg = (c, scade) => `Ciao! Ti invito su InTurno, l'app per incastrare turni, impegni e uscite 😊\n1. Apri ${APP_URL}?invito=${c}\n2. Crea il tuo account\n3. Il codice ${fmtCode(c)} è già inserito: tocca «Entra con il codice»\nVale una sola volta, fino a ${fmtScad(scade)}.`;
+const invFirst = d => { const n = String((d && (d.nome || d.nota)) || "").trim(); if (!n) return ""; const w = n.split(/[\s,]+/).filter(Boolean); const f = (d && d.nome && w.length > 1) ? w[w.length - 1] : w[0]; return f.charAt(0).toUpperCase() + f.slice(1).toLowerCase(); };
+const invMsg = (c, scade, d) => `Ciao${invFirst(d) ? " " + invFirst(d) : ""}! 😊\nTi invito su InTurno, l'app per incastrare turni, impegni e uscite.\n\n👉 Apri questo link: ${APP_URL}?invito=${c}\n1. Crea il tuo account (email e una password a tua scelta)\n2. Tocca «Entra con il codice»: il codice ${fmtCode(c)} è già inserito\n\n🔒 Il codice è personale e vale una sola volta, entro ${fmtScad(scade)}. Non inoltrarlo.`;
+async function prefillFromCode(db) {
+  if (!URL_CODE) return; try { const iv = await db.doc("inviti/" + URL_CODE).get(); const el = $("gname"); if (iv.exists && iv.data().nome && el && !el.value) el.value = iv.data().nome; } catch {}
+}
 function codeBoxHtml(open) {
   return `<details class="more" id="gcodebox" ${open ? "open" : ""}><summary>🎟️ Ho un codice invito</summary>
     <input type="text" id="gcode" placeholder="es. KX7-42Q" autocomplete="off" autocapitalize="characters" value="${URL_CODE ? fmtCode(URL_CODE) : ""}" style="margin-top:6px;text-transform:uppercase;letter-spacing:2px;font-family:monospace;font-size:18px">
@@ -2650,7 +2655,7 @@ async function redeemCode(db, raw, nome) {
   if (!nome || nome.length < 3) { say("Scrivi prima nome e cognome."); return false; }
   let iv = null; try { iv = await db.doc("inviti/" + c).get(); } catch {}
   if (iv && !iv.exists) { say("Codice non trovato: controlla di averlo scritto bene."); return false; }
-  if (iv && iv.exists) { const d = iv.data(); if (d.usatoDa) { say("Questo codice è già stato usato. Chiedine uno nuovo a chi ti ha invitata."); return false; } if (d.scade <= Date.now()) { say("Questo codice è scaduto. Chiedine uno nuovo a chi ti ha invitata."); return false; } }
+  if (iv && iv.exists) { const d = iv.data(); if (d.usatoDa) { say("Questo codice è già stato usato. Chiedine uno nuovo a chi ti ha mandato l'invito."); return false; } if (d.scade <= Date.now()) { say("Questo codice è scaduto. Chiedine uno nuovo a chi ti ha mandato l'invito."); return false; } }
   const now = new Date().toISOString(); let email = ""; try { email = (ST.user && ST.user.email ? await ST.user.email() : "") || ""; } catch {}
   const N = nome.toUpperCase();
   try {
@@ -2668,29 +2673,51 @@ async function redeemCode(db, raw, nome) {
 function startInviti(db, anchor) {
   let ib = $("invbox");
   if (!ib) { ib = document.createElement("div"); ib.id = "invbox"; ib.className = String(anchor.className || "").replace(/\bhidden\b/, "").trim(); anchor.after(ib); }
-  let list = [];
+  if (window.__localMode) { ib.innerHTML = `<h2>🎟️ Codici invito</h2><p class="muted">I codici invito monouso si attivano quando l'app è collegata a Firebase. Per ora i dati restano solo su questo telefono.</p>`; return; }
+  let list = [], fresh = new Set();
+  const share = async (x, b) => { const t = invMsg(x.id, x.d.scade, x.d); if (navigator.share) { try { await navigator.share({ text: t }); return; } catch (e) { if (e && e.name === "AbortError") return; } } try { await navigator.clipboard.writeText(t); b.textContent = "Copiato ✓"; } catch { b.textContent = fmtCode(x.id); } };
   const draw = () => {
     const now = Date.now();
-    const act = list.filter(x => !x.d.usatoDa && x.d.scade > now).sort((a, b) => a.d.scade - b.d.scade);
+    const act = list.filter(x => !x.d.usatoDa && x.d.scade > now).sort((a, b) => String(b.d.creato).localeCompare(String(a.d.creato)));
     const used = list.filter(x => x.d.usatoDa).sort((a, b) => String(b.d.usatoIl).localeCompare(String(a.d.usatoIl)));
     const exp = list.filter(x => !x.d.usatoDa && x.d.scade <= now);
-    const nota = x => x.d.nota ? `<b>${esc(x.d.nota)}</b> · ` : "";
-    ib.innerHTML = `<h2>🎟️ Codici invito</h2><p class="muted">Ogni codice fa entrare una sola persona senza aspettare la tua approvazione. Dopo il primo uso non vale più, e puoi sempre revocare l'accesso.</p>
-      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><input type="text" id="icnota" placeholder="Per chi è? (facoltativo)" maxlength="40" style="flex:1;min-width:150px"><select id="icdur"><option value="24">24 ore</option><option value="48" selected>48 ore</option><option value="168">7 giorni</option></select></div>
-      <div class="stbtn" style="margin-top:8px"><button class="btn" id="icnew">➕ Crea invito</button></div><p class="err" id="icerr"></p>
-      ${act.length ? `<div class="sec">Attivi</div>` + act.map(x => `<div class="req"><div style="flex:1;min-width:0"><b style="font-family:monospace;font-size:18px;letter-spacing:2px">${fmtCode(x.id)}</b><br><span class="muted">${nota(x)}scade ${esc(fmtScad(x.d.scade))}</span></div><span class="row" style="gap:4px;flex-wrap:wrap;justify-content:flex-end">${wa(invMsg(x.id, x.d.scade), "mini wa", "🟢 Invia")}<button class="mini" data-icc="${x.id}">Copia</button><button class="mini" data-icx="${x.id}">Annulla</button></span></div>`).join("") : `<p class="muted">Nessun codice attivo.</p>`}
-      ${used.length ? `<details class="more"><summary>Usati (${used.length})</summary>${used.map(x => `<div class="req"><span><span style="font-family:monospace">${fmtCode(x.id)}</span> → <b>${esc(x.d.nomeUsato || "")}</b><br><span class="muted">${x.d.nota ? esc(x.d.nota) + " · " : ""}${x.d.usatoIl ? esc(new Date(x.d.usatoIl).toLocaleString("it-IT")) : ""}</span></span></div>`).join("")}</details>` : ""}
-      ${exp.length ? `<details class="more"><summary>Scaduti (${exp.length})</summary>${exp.map(x => `<div class="req"><span><span style="font-family:monospace">${fmtCode(x.id)}</span> <span class="muted">${x.d.nota ? esc(x.d.nota) : ""}</span></span><button class="mini" data-icx="${x.id}">✕</button></div>`).join("")}</details>` : ""}`;
+    const who = x => x.d.nome || x.d.nota || "";
+    const card = x => `<div class="invcard ${fresh.has(x.id) ? "new" : ""}">
+        <div class="ph"><span><b>${who(x) ? esc(who(x)) : "Invito"}</b>${fresh.has(x.id) ? ` <span class="badge">nuovo</span>` : ""}<br><span class="muted" style="font-size:12px">⏳ valido fino a ${esc(fmtScad(x.d.scade))}</span></span><span class="invcode">${fmtCode(x.id)}</span></div>
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">${wa(invMsg(x.id, x.d.scade, x.d), "mini wa", "🟢 WhatsApp")}<button class="mini" data-ics="${x.id}">📤 Condividi</button><button class="mini" data-icc="${x.id}">📋 Copia</button><button class="mini" data-icv="${x.id}">👁 Messaggio</button><button class="mini" data-icx="${x.id}">✕ Annulla</button></div>
+        <div class="invmsg hidden" id="icm_${x.id}"></div></div>`;
+    ib.innerHTML = `<h2>🎟️ Codici invito</h2>
+      <p class="muted">Un codice = una persona. Chi lo usa entra subito, senza aspettare la tua approvazione; dopo il primo uso il codice non vale più. Puoi sempre revocare l'accesso dalle persone approvate.</p>
+      <details class="more" ${act.length ? "" : "open"} id="icform"><summary><b>➕ Crea nuovi inviti</b></summary>
+        <div class="fgrid" style="margin-top:6px">
+          <div class="full"><label>Nome e cognome (come nei turni, facoltativo)</label><input type="text" id="icnome" placeholder="es. Rossi Mario" maxlength="50" autocomplete="off"></div>
+          <div><label>Quanti codici</label><select id="icn"><option>1</option><option>2</option><option>3</option><option>5</option><option>10</option></select></div>
+          <div><label>Validità</label><select id="icdur"><option value="24">24 ore</option><option value="48" selected>48 ore</option><option value="168">7 giorni</option><option value="720">30 giorni</option></select></div>
+        </div>
+        <p class="muted" style="font-size:12px;margin:6px 0">Con il nome, il messaggio parte con «Ciao Mario!» e il nome è già scritto quando la persona si registra. Per più codici insieme lascia il nome vuoto.</p>
+        <div class="stbtn"><button class="btn" id="icnew">Crea</button></div><p class="err" id="icerr"></p></details>
+      ${act.length ? `<div class="sec">Da inviare / in attesa (${act.length})</div>` + act.map(card).join("") : `<p class="muted" style="margin-top:8px">Nessun codice attivo.</p>`}
+      ${used.length ? `<details class="more"><summary>✅ Usati (${used.length})</summary>${used.map(x => `<div class="req"><span><b>${esc(x.d.nomeUsato || "")}</b> <span class="muted">con ${fmtCode(x.id)}</span><br><span class="muted" style="font-size:12px">${who(x) ? "per " + esc(who(x)) + " · " : ""}${x.d.usatoIl ? esc(new Date(x.d.usatoIl).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })) : ""}</span></span></div>`).join("")}</details>` : ""}
+      ${exp.length ? `<details class="more"><summary>⌛ Scaduti (${exp.length})</summary>${exp.map(x => `<div class="req"><span><span style="font-family:monospace">${fmtCode(x.id)}</span> <span class="muted">${esc(who(x))}</span></span><span><button class="mini" data-icr="${x.id}">Rinnova</button> <button class="mini" data-icx="${x.id}">✕</button></span></div>`).join("")}</details>` : ""}`;
     $("icnew").onclick = async () => {
-      const bt = $("icnew"); bt.disabled = true;
+      const bt = $("icnew"); bt.disabled = true; $("icerr").textContent = "";
+      const nome = $("icnome").value.trim().toUpperCase().slice(0, 50), n = nome ? 1 : (+$("icn").value || 1), h = +$("icdur").value || 48;
       try {
-        let c = ""; for (let k = 0; k < 5; k++) { const t = newCode(); const ex = await db.doc("inviti/" + t).get(); if (!ex.exists) { c = t; break; } }
-        if (!c) throw new Error("codice");
-        await db.doc("inviti/" + c).set({ creato: new Date().toISOString(), scade: Date.now() + (+$("icdur").value || 48) * 3600e3, usatoDa: null, nota: $("icnota").value.trim().slice(0, 40) });
+        fresh = new Set();
+        for (let i = 0; i < n; i++) {
+          let c = ""; for (let k = 0; k < 5; k++) { const t = newCode(); const ex = await db.doc("inviti/" + t).get(); if (!ex.exists) { c = t; break; } }
+          if (!c) throw new Error("codice");
+          await db.doc("inviti/" + c).set({ creato: new Date().toISOString(), scade: Date.now() + h * 3600e3, usatoDa: null, nome, nota: nome });
+          fresh.add(c);
+        }
       } catch (e) { $("icerr").textContent = "Non riesco a creare il codice: riprova."; bt.disabled = false; }
     };
-    ib.querySelectorAll("[data-icc]").forEach(b => b.onclick = async () => { const x = list.find(y => y.id === b.dataset.icc); try { await navigator.clipboard.writeText(invMsg(x.id, x.d.scade)); b.textContent = "Copiato ✓"; } catch { b.textContent = fmtCode(x.id); } });
+    const X = id => list.find(y => y.id === id);
+    ib.querySelectorAll("[data-ics]").forEach(b => b.onclick = () => share(X(b.dataset.ics), b));
+    ib.querySelectorAll("[data-icc]").forEach(b => b.onclick = async () => { const x = X(b.dataset.icc); try { await navigator.clipboard.writeText(invMsg(x.id, x.d.scade, x.d)); b.textContent = "Copiato ✓"; } catch { b.textContent = fmtCode(x.id); } });
+    ib.querySelectorAll("[data-icv]").forEach(b => b.onclick = () => { const x = X(b.dataset.icv), el = $("icm_" + x.id); el.textContent = invMsg(x.id, x.d.scade, x.d); el.classList.toggle("hidden"); });
     ib.querySelectorAll("[data-icx]").forEach(b => b.onclick = async () => { if (!b.dataset.c) { b.dataset.c = 1; b.textContent = "Conferma"; return; } try { await db.doc("inviti/" + b.dataset.icx).delete(); } catch {} });
+    ib.querySelectorAll("[data-icr]").forEach(b => b.onclick = async () => { const x = X(b.dataset.icr); b.disabled = true; try { const c = newCode(); await db.doc("inviti/" + c).set({ creato: new Date().toISOString(), scade: Date.now() + 48 * 3600e3, usatoDa: null, nome: x.d.nome || "", nota: x.d.nota || "" }); await db.doc("inviti/" + x.id).delete(); fresh = new Set([c]); } catch { b.disabled = false; } });
   };
   db.collection("inviti").onSnapshot(s => { list = s.docs.map(d => ({ id: d.id, d: d.data() })); draw(); }, () => {});
   draw();
@@ -2735,6 +2762,7 @@ async function showRequest(db) {
     ${codeBoxHtml(!!URL_CODE)}
     <div class="stbtn" style="margin-top:10px"><button class="btn ${URL_CODE ? "ghost" : ""}" id="gsend">Invia richiesta</button></div><p id="gerr" class="err"></p>`);
   $("gcodego").onclick = async () => { $("gcodego").disabled = true; if (!(await redeemCode(db, $("gcode").value, $("gname").value.trim()))) $("gcodego").disabled = false; };
+  prefillFromCode(db);
   $("gsend").onclick = async () => {
     const n = $("gname").value.trim(); if (n.length < 3) { $("gerr").textContent = "Scrivi nome e cognome."; return; }
     $("gsend").disabled = true;
