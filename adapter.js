@@ -87,14 +87,14 @@
       <div class="fgrid"><div class="full"><label>Email</label><input id="lem" type="email" autocomplete="email"></div>
       <div class="full"><label>Password (almeno 6 caratteri)</label><input id="lpw" type="password" autocomplete="current-password"></div></div>
       <div class="stbtn" style="margin-top:10px"><button class="btn" id="lin">Accedi</button><button class="btn ghost" id="lup">Crea account</button></div>
-      <p style="margin-top:10px"><button class="mini" id="lgo">Accedi con Google</button> <button class="mini" id="lrs">Password dimenticata</button></p>
+      <p style="margin-top:10px"><button class="mini" id="lrs">Password dimenticata</button></p>
       <p class="err" id="lerr">${msg || ""}</p>`);
     const em = () => document.getElementById("lem").value.trim(), pw = () => document.getElementById("lpw").value;
     const fail = e => { const m = { "auth/invalid-credential": "Email o password non corretti.", "auth/wrong-password": "Password non corretta.", "auth/user-not-found": "Account non trovato: tocca «Crea account».", "auth/email-already-in-use": "Esiste già un account con questa email: tocca «Accedi».", "auth/weak-password": "La password deve avere almeno 6 caratteri.", "auth/invalid-email": "Email non valida." }; document.getElementById("lerr").textContent = m[e.code] || e.message; };
     document.getElementById("lin").onclick = () => auth.signInWithEmailAndPassword(em(), pw()).catch(fail);
     document.getElementById("lup").onclick = () => auth.createUserWithEmailAndPassword(em(), pw()).catch(fail);
     document.getElementById("lrs").onclick = () => { if (!em()) { document.getElementById("lerr").textContent = "Scrivi prima la tua email."; return; } auth.sendPasswordResetEmail(em()).then(() => { document.getElementById("lerr").textContent = "Ti ho mandato un'email per cambiare la password."; }).catch(fail); };
-    document.getElementById("lgo").onclick = () => { const p = new firebase.auth.GoogleAuthProvider(); const standalone = window.navigator.standalone || matchMedia("(display-mode: standalone)").matches;
+    if (document.getElementById("lgo")) document.getElementById("lgo").onclick = () => { const p = new firebase.auth.GoogleAuthProvider(); const standalone = window.navigator.standalone || matchMedia("(display-mode: standalone)").matches;
       (standalone ? auth.signInWithRedirect(p) : auth.signInWithPopup(p).catch(e => e.code === "auth/popup-blocked" ? auth.signInWithRedirect(p) : Promise.reject(e))).catch(fail); };
   }
   window.__logout = () => auth.signOut().then(() => { try { Object.keys(localStorage).filter(k => k.startsWith("turni.")).forEach(k => localStorage.removeItem(k)); } catch (e) {} location.reload(); });
