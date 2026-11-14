@@ -3708,7 +3708,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp">📥 Importa dal Lettore</button>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp">📥 Importa dal Lettore</button><span class="muted" style="font-size:11px;align-self:center">versione 35</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => impPanel();
     if ($("pout")) $("pout").onclick = () => window.__logout();
@@ -4090,6 +4090,6 @@ document.addEventListener("click", e => { document.querySelectorAll(".sug").forE
 
 })();
 </script>
-<script>if ("serviceWorker" in navigator && !window.claude) addEventListener("load", () => { try { navigator.serviceWorker.register("sw.js").catch(() => {}); } catch (e) {} });</script>
+<script>if ("serviceWorker" in navigator && !window.claude) addEventListener("load", () => { try { navigator.serviceWorker.register("sw.js").then(r => { try { r.update(); } catch (e) {} }).catch(() => {}); let rl = false; navigator.serviceWorker.addEventListener("controllerchange", () => { if (rl || !navigator.serviceWorker.controller) return; rl = true; location.reload(); }); } catch (e) {} });</script>
 </body>
 </html>
