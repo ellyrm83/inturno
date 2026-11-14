@@ -1761,7 +1761,8 @@ async function ocrEngine(say) {
     try { OCRW = await Promise.race([Tesseract.createWorker("eng", 1, { logger: () => {} }), new Promise((_, rej) => setTimeout(() => rej(new Error("il lettore non si è avviato entro 3 minuti (connessione lenta?)")), 180000))]); }
     catch (e) { throw new Error("Preparazione del lettore non riuscita: " + (e && e.message || e)); } finally { clearInterval(tick); } }
   let last = "";
-  return { rec: async (canvas, psm, wl) => { const k = psm + "|" + (wl || ""); if (k !== last) { await OCRW.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: wl || "", preserve_interword_spaces: "1" }); last = k; } const r = await OCRW.recognize(canvas); return String(r.data.text || "").replace(/\s+/g, " ").trim(); } };
+  return { words: async canvas => { await OCRW.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "", preserve_interword_spaces: "1" }); last = ""; const r = await OCRW.recognize(canvas, {}, { blocks: true, text: true }); const out = []; const walk = o => { if (!o) return; if (Array.isArray(o)) return o.forEach(walk); if (o.words) return o.words.forEach(w => out.push({ s: w.text, x0: w.bbox.x0, x1: w.bbox.x1, y0: w.bbox.y0, y1: w.bbox.y1 })); walk(o.blocks); walk(o.paragraphs); walk(o.lines); }; if (r.data.words && r.data.words.length) walk({ words: r.data.words }); else walk(r.data.blocks); return out; },
+    rec: async (canvas, psm, wl) => { const k = psm + "|" + (wl || ""); if (k !== last) { await OCRW.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: wl || "", preserve_interword_spaces: "1" }); last = k; } const r = await OCRW.recognize(canvas); return String(r.data.text || "").replace(/\s+/g, " ").trim(); } };
 }
 // file (foto o PDF scansionato) → canvas
 async function ocrCanvas(f) {
@@ -3288,6 +3289,7 @@ function salParseBusta(lines) {
 async function salImport(f) {
   const box = $("salimp"); if (!box) return; box.innerHTML = `<p class="muted"><span class="busy"></span>Leggo la busta paga qui sul telefono…</p>`;
   if (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name || "")) { try { const z = salParseZucchetti(await salPdfRows(f)); if (z && z.righe.length > 3) { SALZU = salZuToImport(z); salZuDraw(); return; } } catch (e) { console.warn(e); } }
+  try { const eng = await ocrEngine(t => { const e = $("salimp"); if (e) e.innerHTML = `<p class="muted"><span class="busy"></span>${esc(t)}</p>`; }); if (eng.words) { const e0 = $("salimp"); if (e0) e0.innerHTML = `<p class="muted"><span class="busy"></span>Leggo la busta qui sul telefono… (una foto può richiedere un minuto)</p>`; const PG = []; for (const cv of [].concat(await ocrCanvas(f))) PG.push(salWordsToRows(await eng.words(salPrep(cv)))); const z = salParseZucchetti(PG); if (z && z.righe.length > 3) { SALZU = salZuToImport(z); SALZU.note = "Letta da foto: controlla bene gli importi. " + SALZU.note; salZuDraw(); return; } } } catch (e) { console.warn(e); }
   let items = []; try { items = salParseBusta(await salPdfLines(f)); } catch (e) { box.innerHTML = `<p class="err">Lettura non riuscita: ${esc(e && e.message || String(e))}</p>`; return; }
   if (!items.length) { box.innerHTML = `<p class="err">Non ho riconosciuto voci in questo file. Se è una foto, prova con il PDF originale; altrimenti compila le voci qui sotto.</p>`; return; }
   SALIMP = items; salImpDraw();
@@ -3295,6 +3297,7 @@ async function salImport(f) {
 var SALIMP = null;
 function salImpDraw() {
   const box = $("salimp"), items = SALIMP; if (!box || !items) return;
+  const dt = $("salcfg"); if (dt && !dt.open) dt.open = true;
   const fmt = v => typeof v === "number" ? v.toLocaleString("it-IT", { maximumFractionDigits: 4 }) : v;
   box.innerHTML = `<div class="ovbox" style="margin:8px 0"><b>📄 Voci trovate nella busta</b><p class="muted" style="font-size:12px">Il file è stato letto solo su questo telefono e non viene salvato né inviato. Togli la spunta a quello che non va e correggi i valori se serve.</p>
     ${items.map((it, k) => `<label class="row" style="gap:6px;margin:4px 0"><input type="checkbox" data-ip="${k}" checked><span style="flex:1;font-size:13px">${esc(it.label)}</span><input data-iv="${k}" value="${esc(String(fmt(it.value)))}" style="width:90px;text-align:right"></label>`).join("")}
@@ -3330,69 +3333,85 @@ async function salPdfRows(f) {
     for (const it of tc.items) { const s = (it.str || "").trim(); if (!s) continue; const x0 = it.transform[4], y = vp.height - it.transform[5], x1 = x0 + (it.width || 0);
       let r = rows.find(r => Math.abs(r.y - y) < 3.5); if (!r) rows.push(r = { y, it: [] });
       // spezza "Indennita' turno 11,000" se arrivano insieme
-      r.it.push({ x0, x1, s }); }
+      const cw = (x1 - x0) / Math.max(1, s.length), re = /\S+/g; let m; while ((m = re.exec(s))) r.it.push({ x0: x0 + m.index * cw, x1: x0 + (m.index + m[0].length) * cw, s: m[0] }); }
     rows.forEach(r => { r.it.sort((a, b) => a.x0 - b.x0); r.t = r.it.map(i => i.s).join(" "); }); rows.sort((a, b) => a.y - b.y); pages.push(rows);
   }
   return pages;
 }
 function salParseZucchetti(pages) {
-  const all = pages.flat(), txt = all.map(r => r.t).join("\n");
-  if (!/DESCRIZIONE VOCE/i.test(txt) || !/TRATTENUTE/i.test(txt) || !/COMPETENZE/i.test(txt.replace(/\s/g, ""))) return null;
-  const num = s => +String(s).replace(/\*/g, "").replace(/\./g, "").replace(",", "."), isN = s => /^\*{0,4}-?\d{1,3}(\.\d{3})*,\d{2,5}$|^\*{0,4}-?\d+,\d{2,5}$/.test(s);
-  // colonne: bordo destro delle intestazioni (con margine)
-  const COL = { q: 272, unit: 341, fig: 423, comp: 498, tratt: 574 };
-  for (const r of all) if (/DESCRIZIONE VOCE/.test(r.t)) { const g = re => { const i = r.it.find(i => re.test(i.s)); return i ? i.x1 : null; };
-    const og = g(/ORE\/GIORNI/), un = g(/UNITARIO/), fg = g(/FIGURATI/); if (og) COL.q = og + 13; if (un) COL.unit = un + 16; if (fg) COL.fig = fg + 24; break; }
-  const colOf = x1 => { let best = "tratt", bd = 1e9; for (const [k, v] of Object.entries(COL)) { const d = Math.abs(x1 - v); if (d < bd) { bd = d; best = k; } } return best; };
-  const under = (label, rows) => { for (let i = 0; i < rows.length; i++) { const h = rows[i].it.find(x => label.test(x.s)); if (!h) continue; for (let j = i + 1; j < Math.min(rows.length, i + 3); j++) { const v = rows[j].it.find(x => x.x0 < h.x1 + 8 && x.x1 > h.x0 - 8); if (v) return v.s; } } return null; };
-  const p0 = pages[0], out = { voci: {}, righe: [], tratt: [], comp: [], contrib: [], totali: {}, el: [] };
-  out.livello = under(/^LIVELLO$/, p0);
-  const mese = (() => { const r = p0.find(r => /^(Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)$/i.test((r.it.find(i => /^[A-Z][a-z]+$/.test(i.s) && /bre|io|aio|zo|ile|gno|glio|sto/.test(i.s)) || {}).s || "")); if (!r) return null; const m = r.it.find(i => /^(Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)$/i.test(i.s)), y = r.it.find(i => /^20\d\d$/.test(i.s));
-    const M = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"].indexOf(m.s.toLowerCase()) + 1; return y && M ? y.s + "-" + String(M).padStart(2, "0") : null; })();
-  // elementi della retribuzione (tabella sopra le voci)
-  let inEl = false, totEl = 0;
-  for (const r of p0) { if (/E\s?L\s?E\s?M\s?E\s?N\s?T\s?I/.test(r.t.replace(/\s/g, "") ? r.t : "") && /RETRIBUZIONE|R\s?E\s?T\s?R/.test(r.t)) { inEl = true; continue; }
-    if (inEl) { if (/DESCRIZIONE VOCE/.test(r.t)) break; if (/^TOTALE$/.test(r.t.trim())) continue; const ns = r.it.filter(i => isN(i.s));
-      if (ns.length === 1 && r.it.length === 1) { totEl = num(ns[0].s); continue; }
-      let lab = []; for (const i of r.it) { if (isN(i.s)) { out.el.push({ n: lab.join(" "), v: num(i.s) }); lab = []; } else lab.push(i.s); } } }
-  // voci del corpo, con sezioni
-  let sec = "voci", started = false;
+  // lettore generico a colonne: Zucchetti, TeamSystem, Inaz, ADP, Paghe Web… (PDF con testo)
+  const all = pages.flat();
+  const num = s => +String(s).replace(/[*€\s]/g, "").replace(/\./g, "").replace(",", "."), isN = s => /^[*€]{0,4}\s?-?\d{1,3}(\.\d{3})*,\d{2,5}-?$|^[*€]{0,4}\s?-?\d+,\d{2,5}-?$/.test(s);
+  const U = s => String(s).toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  // trova una parola nella riga anche se scritta a lettere spaziate (C O M P E T E N Z E): restituisce [x0,x1]
+  const find = (r, re) => { let str = "", map = []; r.it.forEach((it, k) => { for (const ch of U(it.s).replace(/\s/g, "")) { str += ch; map.push(k); } }); const m = str.match(re); if (!m) return null; const a = r.it[map[m.index]], b = r.it[map[m.index + m[0].length - 1]]; return [a.x0, b.x1]; };
+  const RC = /COMPETEN|SPETTANZE|ACREDITO|ASSEGNI|IMPORTIPOSITIVI/, RT = /TRATTEN|RITENUTE|ADEBITO|IMPORTINEGATIVI/;
+  let hdr = null; for (const r of all) { if (find(r, RC) && find(r, RT) && (find(r, /DESCRIZIONE|VOCE|CAUSALE/) || r.it.length > 3)) { hdr = r; break; } }
+  if (!hdr) return null;
+  const COL = {}, c = find(hdr, RC), t = find(hdr, RT); COL.comp = c[1]; COL.tratt = t[1];
+  const q = find(hdr, /ORE\/GIORNI|QUANTITA|Q\.TA|ORE\/GG|GG\/ORE|NUMERO|QTA|ORE|GIORNI/), un = find(hdr, /IMPORTOUNITARIO|UNITARIO|BASE|TARIFFA|PARAMETRO|IMPORTOBASE|VALOREUNIT/), fg = find(hdr, /FIGURATI|FIGURATIV|RIFERIMENTO|IMPONIBIL/);
+  if (/IMPONIBIL|ALIQUOT/.test(U(hdr.t)) && !/DESCRIZ|VOCE/.test(U(hdr.t))) { const im = find(hdr, /IMPONIBIL/), al = find(hdr, /ALIQUOT/); if (im) COL.unit = im[1]; if (al) COL.fig = al[1]; if (COL.unit && COL.fig) COL.q = COL.unit - (COL.comp - COL.fig) * 0.92; }
+  else { if (q && q[1] < c[0]) COL.q = q[1]; if (un && un[1] < c[0]) COL.unit = un[1]; if (fg && fg[1] < c[0] && (!un || fg[1] > un[1] + 10)) COL.fig = fg[1]; }
+  const dEnd = Math.min(...Object.values(COL)) - 45;
+  const colOf = (x0, x1) => { let best = null, bd = 1e9; for (const [k, v] of Object.entries(COL)) { const d = Math.abs(x1 - v); if (d < bd) { bd = d; best = k; } } return best; };
+  const under = (label, rows, inline) => { for (let i = 0; i < rows.length; i++) { const h = find(rows[i], label); if (!h) continue; if (inline) { const v = rows[i].it.find(x => x.x0 > h[1] && x.x0 < h[1] + 120 && /\S/.test(x.s) && !label.test(U(x.s))); if (v) return v.s; } for (let j = i + 1; j < Math.min(rows.length, i + 3); j++) { const v = rows[j].it.find(x => x.x0 < h[1] + 10 && x.x1 > h[0] - 10); if (v) return v.s; } } return null; };
+  const p0 = pages[0], out = { voci: {}, righe: [], el: [], totali: {} };
+  // livello, mese, part-time
+  out.livello = (v => v && /^[0-9A-Z]{1,3}°?$/.test(v) ? v : null)(under(/LIVELLO|LIV\./, p0)) || (U(p0.map(r => r.t).join(" ")).match(/LIVELLO\s*:?\s*([0-9]{1,2}[A-Z°]?|[A-Z][0-9])\b/) || [])[1] || null;
+  const MN = ["GENNAIO", "FEBBRAIO", "MARZO", "APRILE", "MAGGIO", "GIUGNO", "LUGLIO", "AGOSTO", "SETTEMBRE", "OTTOBRE", "NOVEMBRE", "DICEMBRE"];
+  for (const r of p0.slice(0, 40)) { const T = U(r.t), m = T.match(new RegExp("\\b(" + MN.join("|") + ")\\b\\s*(?:\\/|-)?\\s*(20\\d\\d)")) || T.match(new RegExp("\\b(" + MN.join("|") + ")\\b")); if (m) { const y = m[2] || (T.match(/\b(20\d\d)\b/) || [])[1]; if (y) { out.mese = y + "-" + String(MN.indexOf(m[1]) + 1).padStart(2, "0"); break; } } }
+  for (const r of all) { const T = U(r.t); if (/% ?P-?T|PART[- ]?TIME|% ?P\.T\.|PERC.*PART/.test(T)) { const v = r.it.map(x => x.s).filter(s => /^\d{1,3}(,\d{1,3})?%?$/.test(s)).map(s => num(s.replace("%", ""))).filter(v => v > 10 && v < 100); if (v.length) { out.pt = v[v.length - 1]; break; } } }
+  // elementi fissi della retribuzione (sopra la tabella)
+  const hi = all.indexOf(hdr), RE_EL = /STIPENDIO BASE|PAGA BASE|MINIMO|CONTINGENZA|SCATTI|SUPER ?MINIMO|E\.?D\.?R|TERZO ELEMENTO|AD PERSONAM|ASSEGNO AD|SUPERMIN/;
+  for (const r of all.slice(0, hi)) { let lab = []; for (const i of r.it) { if (isN(i.s)) { const L = U(lab.join(" ")); if (RE_EL.test(L) && !/ORE|ORAR|GIORN|PROSSIM|:|MAT/.test(L)) out.el.push({ n: lab.join(" "), v: num(i.s) }); else if (/^TOTALE$/.test(L.trim()) || /RETRIBUZIONE (LORDA|MENSILE|TABELLARE)/.test(L)) out.totEl = num(i.s); lab = []; } else lab.push(i.s); } if (/^TOTALE$/.test(U(r.t).trim())) { const nx = all[all.indexOf(r) + 1]; if (nx && nx.it.length === 1 && isN(nx.it[0].s)) out.totEl = num(nx.it[0].s); } }
+  if (!out.totEl && out.el.length) out.totEl = Math.round(out.el.reduce((s, e) => s + e.v, 0) * 100) / 100;
+  // corpo: righe con descrizione a sinistra e importi nelle colonne
+  const hdrC = /IMPONIBIL|ALIQUOT/.test(U(hdr.t)) && !/DESCRIZ|VOCE/.test(U(hdr.t));
+  let sec = "voci", body = hdrC, codes = 0, rowsN = 0, pre = hdrC;
+  const STOP = /^NOTE\b|MODELLO PER APPLICATIVI|^TOTALE COMPETENZE|^TOT\.? COMPETENZE|^NETTO\b|^IMPONIBILE (PREVIDENZIALE|FISCALE)\s*$|^PROGRESSIVI/;
   for (const rows of pages) for (const r of rows) {
-    if (/DESCRIZIONE VOCE/.test(r.t)) { started = true; sec = "voci"; continue; }
-    if (!started) continue;
-    if (/^NOTE\b/.test(r.t) || /Modello per applicativi/.test(r.t)) { started = false; continue; }
-    if (/Imponibili\s+Aliquote/.test(r.t)) { sec = "contrib"; continue; }
-    if (/Ctb\.\s*ded/.test(r.t)) { sec = "dedu"; continue; }
-    if (/Imposta sul reddito/.test(r.t)) { sec = "irpef"; continue; }
-    if (/^Addizionali/.test(r.t)) { sec = "addiz"; continue; }
-    if (/^Ratei/.test(r.t)) { sec = "ratei"; continue; }
-    if (sec === "ratei") { const m = r.t.match(/^([A-Z.Ol ]+?)\s*:\s/); const sal = r.it.filter(i => isN(i.s.replace(/(\d),(\d{3})$/, "$1,$2"))); const last = r.it[r.it.length - 1]; if (m && /Saldo/.test(r.t) && last && /^\d+,\d{3}$/.test(last.s)) out.totali["Saldo " + m[1].trim().toLowerCase().replace("r.o.l", "ROL").replace("perm", "permessi")] = num(last.s.replace(/(\d),(\d{3})$/, "$1.$2").replace(".", ",")); continue; }
-    if (r.it[0] && /^[A-Z0-9]{3,7}\s+\S/.test(r.it[0].s) && r.it[0].x0 < 40) { const m = r.it[0].s.match(/^([A-Z0-9]{3,7})\s+(.*)$/); const w = r.it[0].x1 - r.it[0].x0, cut = r.it[0].x0 + w * (m[1].length + 1) / r.it[0].s.length; r.it.splice(0, 1, { x0: r.it[0].x0, x1: cut - 3, s: m[1] }, { x0: cut, x1: r.it[0].x1, s: m[2] }); }
+    const T = U(r.t);
+    if (r === hdr && hdrC) { pre = false; sec = "contrib"; continue; }
+    if (r === hdr || (find(r, RC) && find(r, RT) && r.it.length > 3 && !/IMPONIBIL|ALIQUOT|ANNO/.test(T))) { body = true; pre = false; sec = "voci"; continue; }
+    if (!body) continue;
+    if (STOP.test(T.trim())) { body = false; continue; }
+    if (/IMPONIBILI\s+ALIQUOTE|CONTRIBUTI PREVIDENZIALI|RITENUTE PREVIDENZIALI/.test(T)) { sec = "contrib"; continue; }
+    if (/CTB\.\s*DED/.test(T)) { sec = "dedu"; continue; }
+    if (/IMPOSTA SUL REDDITO|RITENUTE FISCALI/.test(T)) { sec = "irpef"; continue; }
+    if (/^ADDIZIONALI/.test(T.trim())) { sec = "addiz"; continue; }
+    if (/^RATEI|^FERIE\s*:|^R\.O\.L|^PERM\s*:/.test(T.trim())) { if (/SALDO/.test(T)) { const m = T.match(/^([A-Z.]+)\s*:/), last = r.it[r.it.length - 1]; if (m && last && /^\d+,\d{2,3}$/.test(last.s)) out.totali["Saldo " + m[1].toLowerCase().replace("r.o.l", "ROL").replace("perm", "permessi")] = num(last.s); } if (/^RATEI/.test(T.trim())) sec = "ratei"; continue; }
+    if (sec === "ratei") continue;
+    if (r.it[0] && /^[A-Z0-9]{2,7}\s+\S/.test(r.it[0].s) && r.it[0].x0 < dEnd / 3) { const m = r.it[0].s.match(/^([A-Z0-9]{2,7})\s+(.*)$/); if (/\d/.test(m[1]) || /^[A-Z]{2,3}\d/.test(m[1])) { const w = r.it[0].x1 - r.it[0].x0, cut = r.it[0].x0 + w * (m[1].length + 1) / r.it[0].s.length; r.it.splice(0, 1, { x0: r.it[0].x0, x1: cut - 3, s: m[1] }, { x0: cut, x1: r.it[0].x1, s: m[2] }); } }
     const first = r.it[0]; if (!first) continue;
-    const hasCode = /^[A-Z0-9]{3,7}$/.test(first.s) && first.x0 < 40 && /\d|[A-Z]{2}/.test(first.s);
-    const desc = r.it.filter((i, k) => !(k === 0 && hasCode) && !isN(i.s) && i.x1 < 235 && !/^\d{4}$/.test(i.s)).map(i => i.s).join(" ").replace(/&apos;/g, "'").trim();
-    const cols = {}; r.it.filter(i => isN(i.s) || (sec === "voci" && /^\d+,\d{3}$/.test(i.s))).forEach(i => { const c = colOf(i.x1); cols[c] = num(i.s); });
-    if (!desc && !Object.keys(cols).length) continue;
-    if (!hasCode) continue; // righe senza codice: intestazioni, % P-T, LAZIO, ROMA…
+    const hasCode = /^[A-Z0-9]{2,7}$/.test(first.s) && /\d/.test(first.s) && first.x0 < dEnd / 3;
+    const desc = r.it.filter((i, k) => !(k === 0 && hasCode) && !isN(i.s) && i.x1 < dEnd + 40 && !/^\d+([.,]\d+)?$/.test(i.s)).map(i => i.s).join(" ").replace(/&apos;/g, "'").trim();
+    const cols = {}; r.it.filter(i => i.x0 > dEnd - 30 && (isN(i.s) || /^\d+,\d{3}$/.test(i.s) || /^\d{1,3}(,\d+)?$/.test(i.s))).forEach(i => { const k = colOf(i.x0, i.x1); if (k && !/^20\d\d$/.test(i.s)) cols[k] = num(i.s.replace(/-$/, "")); });
     const anno = (r.it.find(i => /^20\d\d$/.test(i.s)) || {}).s;
+    if (!desc || (!Object.keys(cols).length && !hasCode)) continue;
+    if (pre && !r.it.some(i => i.x0 > dEnd - 30 && isN(i.s))) continue;
+    if (/^(LAZIO|ROMA|[A-Z]+)$/.test(U(desc)) && !Object.keys(cols).length) continue;
+    rowsN++; if (hasCode) codes++;
     out.righe.push({ cod: hasCode ? first.s : null, n: desc + (anno ? " " + anno : ""), sec, ...cols });
   }
-  // fondo totale di sopra
-  const fin = (label, rows) => { const v = under(label, rows); return v && isN(v) ? num(v) : null; };
-  const last = pages[pages.length - 1];
-  out.totComp = fin(/^COMPETENZE$/, last) ?? fin(/COMPETENZE$/, last); out.totTratt = null;
-  for (const r of last) if (/TOT\s+COMPETENZE/.test(r.t)) { const i = all.indexOf(r); const nx = last[last.indexOf(r) + 1]; if (nx) { const ns = nx.it.filter(x => isN(x.s)); if (ns.length >= 2) { out.totComp = num(ns[ns.length - 2].s); out.totTratt = num(ns[ns.length - 1].s); out.trSulNetto = ns.length >= 3 ? num(ns[ns.length - 3].s) : null; } } }
-  for (const r of last) { const m = r.it.find(i => /^\*+\d/.test(i.s)); if (m) out.netto = num(m.s); }
-  for (const r of last) if (/IMPOSTA LORDA/.test(r.t)) { const nx = last[last.indexOf(r) + 1]; if (nx) { const ns = nx.it.filter(x => isN(x.s)); if (ns.length) { out.totali["IRPEF lorda"] = num(ns[0].s); out.totali["Detrazioni"] = ns.length > 2 ? num(ns[ns.length - 2].s) : null; out.totali["IRPEF netta"] = num(ns[ns.length - 1].s); } } }
-  for (const r of last) if (/Emolumenti correnti/.test(r.t)) { const ns = r.it.filter(x => isN(x.s)); if (ns.length) out.totali["Imponibile fiscale"] = num(ns[0].s); }
-  for (const r of p0) if (/% P-T/.test(r.t)) { const ns = r.it.filter(x => /^\d+,\d{3}$/.test(x.s)); if (ns.length) out.pt = num(ns[ns.length - 1].s); }
-  const oreL = under(/^LAV\.$/, p0); if (oreL) out.totali["Ore lavorate"] = oreL;
-  out.totEl = totEl; out.mese = mese; return out;
+  if (codes > rowsN * 0.6) out.righe = out.righe.filter(r => r.cod); // formato con codici: scarta le righe di servizio
+  // totali in fondo
+  const val = (re, rows) => { for (let i = 0; i < rows.length; i++) { const h = find(rows[i], re); if (!h) continue; const right = rows[i].it.filter(x => x.x0 > h[1] - 2 && isN(x.s)); if (right.length) return num(right[0].s); for (let j = i + 1; j < Math.min(rows.length, i + 3); j++) { const v = rows[j].it.find(x => isN(x.s) && x.x0 < h[1] + 25 && x.x1 > h[0] - 25); if (v) return num(v.s); } } return null; };
+  const last = pages[pages.length - 1].concat(pages.length > 1 ? pages[0] : []);
+  out.totComp = val(/TOTCOMPETENZE|TOTALECOMPETENZE|TOTALESPETTANZE|TOTALELORDO/, last); out.totTratt = val(/TOTTRATTENUTE|TOTALETRATTENUTE|TOTALERITENUTE/, last);
+  for (const r of last) { const m = r.it.find(i => /^\*{2,}\d/.test(i.s)); if (m) { out.netto = num(m.s); break; } }
+  if (!out.netto) out.netto = val(/NETTOINBUSTA|NETTODELMESE|NETTOAPAGARE|NETTOBUSTA|NETTOCORRISPOSTO|^NETTO$|NETTO/, last);
+  const il = val(/IMPOSTALORDA/, last); if (il) out.totali["IRPEF lorda"] = il;
+  for (const r of last) if (find(r, /IMPOSTALORDA/)) { const nx = last[last.indexOf(r) + 1]; if (nx) { const ns = nx.it.filter(x => isN(x.s)); if (ns.length > 2) { out.totali["Detrazioni"] = num(ns[ns.length - 2].s); out.totali["IRPEF netta"] = num(ns[ns.length - 1].s); } } break; }
+  if (!out.totali["Detrazioni"]) { const d = val(/TOT\.?DETR|DETRAZIONILAVORO|DETR\.LAV/, last); if (d) out.totali["Detrazioni"] = d; }
+  const ifc = val(/EMOLUMENTICORRENTI|IMPONIBILEFISCALE|IMPONIBILEIRPEF/, last); if (ifc) out.totali["Imponibile fiscale"] = ifc;
+  out.formato = /ZUCCHETTI/.test(U(all.map(r => r.t).join(" "))) ? "Zucchetti" : /TEAMSYSTEM/.test(U(all.map(r => r.t).join(" "))) ? "TeamSystem" : /INAZ/.test(U(all.map(r => r.t).join(" "))) ? "Inaz" : "a colonne";
+  return out.righe.length ? out : null;
 }
 function salZuToImport(z) {
+  const num2 = s => +String(s).replace(/\./g, "").replace(",", ".");
   const R = z.righe, d = { fonte: "zu", tipo: "busta", mese: z.mese ? z.mese.slice(5) + "/" + z.mese.slice(0, 4) : null, voci: {}, competenze: [], tratt: [], righe: [], totali: z.totali, lordo: z.totComp, netto: z.netto, note: "" };
   const cat = r => { const n = r.n.toUpperCase();
-    if (r.sec === "contrib") return /PREVAER|FONDO|PENS/.test(n) ? "fondo" : "contributi"; if (r.sec === "dedu") return "fondo";
+    if (r.sec === "contrib" || (r.comp == null && /INPS|\bIVS\b|FPLD|CONTRIB|\bFIS\b|CIGS/.test(n))) return /PREVAER|FONDO|PENS|COMETA|FON\.?TE|PREVI/.test(n) ? "fondo" : "contributi"; if (/PREVAER|FONDO PENS|COMETA|FON\.?TE/.test(n) && r.tratt != null) return "fondo"; if (r.sec === "dedu") return "fondo";
     if (r.sec === "addiz" || /IMP\.?\s?SOST|IRPEF|IMPOSTA/.test(n)) return "tasse"; if (r.sec === "irpef") return /207|CUNEO|BONUS|TRATT\. INTEGR/.test(n) ? "indennita" : "tasse";
     if (/RETRIBUZ(?!.*TFR)|STIPENDIO|PAGA BASE/.test(n) && !/TFR/.test(n)) return "fissa"; if (/MAGG/.test(n)) return "turni"; if (/STRAORD/.test(n)) return "straordinari";
     if (/(^|[^A-Z])IND(\.|ENNIT)/.test(n)) return "indennita"; if (/L104|L\.104|PERM|MALATT|ASSENZ|FERIE|ROL|CONGEDO/.test(n)) return "assenze";
@@ -3403,49 +3422,81 @@ function salZuToImport(z) {
   body.forEach(a => { if (a.comp == null) return; const b = body.find(b => b !== a && b.tratt === a.comp && !paired.has(b)); if (b) { paired.add(a); paired.add(b); } });
   const pt = z.pt && z.pt > 0 && z.pt < 100 ? z.pt : 100, tot = z.totEl || z.el.reduce((s, e) => s + e.v, 0);
   if (z.livello) d.voci.livello = String(z.livello);
-  if (tot) d.voci.fisso = Math.round(tot * pt) / 100;
-  const nott = body.find(r => /MAGG.*NOT/i.test(r.n) && r.unit); if (nott) { const p = +(nott.n.match(/(\d{1,3})\s*%/) || [])[1]; if (p) { d.voci.percNott = p; d.voci.pagaOra = Math.round(nott.unit / (p / 100) * 100) / 100; } }
-  for (const [re, k] of [[/MAGG.*(DOM)/i, "percDom"], [/MAGG.*FEST/i, "percFest"], [/STRAORD.*NOT/i, "percStrNott"], [/STRAORD.*FEST/i, "percStrFest"], [/STRAORD/i, "percStr"]]) { const r = body.find(r => re.test(r.n) && /%/.test(r.n)); if (r && !d.voci[k]) { const p = +(r.n.match(/(\d{1,3})\s*%/) || [])[1]; if (p) d.voci[k] = p; if (!d.voci.pagaOra && r.unit && p) d.voci.pagaOra = Math.round(r.unit / (p / 100) * 100) / 100; } }
+  let fx = tot ? Math.round(tot * pt) / 100 : 0;
+  if (!fx) { const el = body.filter(r => r.comp != null && r.unit == null && /STIPENDIO|PAGA BASE|MINIMO|CONTINGENZA|SCATTI|SUPER ?MINIMO|E\.?D\.?R|TERZO ELEMENTO|AD PERSONAM/i.test(r.n)); if (el.length) fx = Math.round(el.reduce((s, r) => s + r.comp, 0) * 100) / 100; }
+  if (!fx) { const rr = body.find(r => r.comp != null && /RETRIBUZIONE (ORDINARIA|MENSILE|BASE)|^RETRIBUZIONE$|STIPENDIO/i.test(r.n)); if (rr) fx = rr.comp; }
+  if (fx && fx > 400) d.voci.fisso = fx;
+  const nott = body.find(r => /NOTT/i.test(r.n) && /%/.test(r.n) && !/STRAORD/i.test(r.n) && r.unit); if (nott) { const p = +(nott.n.match(/(\d{1,3})\s*%/) || [])[1]; if (p) { d.voci.percNott = p; d.voci.pagaOra = Math.round(nott.unit / (p / 100) * 100) / 100; } }
+  for (const [re, k] of [[/NOTT.*(DOM)|DOM.*NOTT/i, "percNottDom"], [/NOTT.*FEST|FEST.*NOTT/i, "percNottFest"], [/DOMENIC/i, "percDom"], [/FESTIV/i, "percFest"], [/STRAORD.*NOT/i, "percStrNott"], [/STRAORD.*FEST/i, "percStrFest"], [/STRAORD/i, "percStr"]]) { const r = body.find(r => re.test(r.n) && /%/.test(r.n) && (k.startsWith("percStr") || !/STRAORD/i.test(r.n)) && (k.includes("Nott") || k.startsWith("percStr") || !/NOTT/i.test(r.n))); if (r && !d.voci[k]) { const p = +(r.n.match(/(\d{1,3})\s*%/) || [])[1]; if (p) d.voci[k] = p; if (!d.voci.pagaOra && r.unit && p) d.voci.pagaOra = Math.round(r.unit / (p / 100) * 100) / 100; } }
   // contributi a carico dipendente
-  const inps = R.filter(r => r.sec === "contrib" && /-?c\/DIP/i.test(r.n) && !/PREVAER|FONDO/i.test(r.n) && r.fig != null).reduce((s, r) => s + r.fig, 0); if (inps) d.voci.inps = Math.round(inps * 1000) / 1000;
-  const fondo = R.filter(r => r.sec === "contrib" && /c\/DIP/i.test(r.n) && /PREVAER|FONDO/i.test(r.n));
-  if (fondo.length) { d.voci.fondoPerc = fondo.reduce((s, r) => s + (r.fig || 0), 0); d.voci.fondoBase = fondo[0].unit; }
+  const aliq = r => { const p = r.n.match(/(\d{1,2},\d{1,3})\s*%/); if (p) return num2(p[1]); const v = r.fig != null ? r.fig : r.unit; return v != null && v < 15 ? v : (r.tratt && r.unit > 100 ? Math.round(r.tratt / r.unit * 100000) / 1000 : null); };
+  const isC = r => (r.sec === "contrib" || /INPS|\bIVS\b|FPLD|CONTRIB|\bFIS\b|CIGS|F\.?\s?SOLID/i.test(r.n)) && r.tratt != null && !/c\/AZ|AZIEND|DATORE/i.test(r.n);
+  const inps = R.filter(r => isC(r) && !/PREVAER|FONDO|PENS|COMETA|FON\.?TE|PREVI/i.test(r.n)).reduce((s, r) => s + (aliq(r) || 0), 0); if (inps) d.voci.inps = Math.round(inps * 1000) / 1000;
+  const fondo = R.filter(r => r.tratt != null && /PREVAER|FONDO PENS|COMETA|FON\.?TE|PREVIDENZA COMPL/i.test(r.n) && !/c\/AZ/i.test(r.n));
+  if (fondo.length) { const pp = fondo.reduce((s, r) => s + (aliq(r) || 0), 0); if (pp) { d.voci.fondoPerc = Math.round(pp * 1000) / 1000; d.voci.fondoBase = fondo[0].unit > 100 ? fondo[0].unit : null; } }
   // imposta sostitutiva: quali voci ci rientrano (somma × (1 − inps) = imponibile)
-  const sostR = R.find(r => /IMP\.?\s?SOST/i.test(r.n)), comps = body.filter(r => r.comp != null && !paired.has(r) && !/RETRIBUZ/i.test(r.n)), sostSet = new Set();
+  const sostR = R.find(r => /IMP\.?\s?SOST|SOSTITUTIVA/i.test(r.n)), comps = body.filter(r => r.comp != null && !paired.has(r) && !/RETRIBUZ/i.test(r.n)), sostSet = new Set();
   if (sostR && sostR.unit && comps.length <= 14) { const target = sostR.unit, k = 1 - (inps || 0) / 100; let best = null, bd = 1e9;
     for (let m = 1; m < (1 << comps.length); m++) { let s = 0; comps.forEach((c, i) => { if (m & (1 << i)) s += c.comp; }); const dd = Math.abs(s * k - target); if (dd < bd - 1e-9) { bd = dd; best = m; } }
     if (best != null && bd < 0.6) comps.forEach((c, i) => { if (best & (1 << i)) sostSet.add(c); }); }
   // competenze ricorrenti: indennità a giorno/ora/mese
   body.filter(r => r.comp != null && !paired.has(r) && /(^|[^A-Z])IND(\.|ENNIT)/i.test(r.n)).forEach(r => d.competenze.push({ n: r.n.replace(/Indennita'/i, "Indennità"), v: r.unit != null ? r.unit : r.comp, tipo: r.unit != null ? (/ORA|ORAR/i.test(r.n) ? "ora" : "giorno") : "mese", tass: sostSet.has(r) ? "sost" : "normale" }));
-  R.filter(r => r.sec === "irpef" && r.comp != null).forEach(r => d.competenze.push({ n: r.n, v: r.comp, tipo: "mese", tass: "esente" }));
+  R.filter(r => (r.sec === "irpef" || /L\.?\s?207|CUNEO|TRATT\.? INTEGR|BONUS/i.test(r.n)) && r.comp != null).forEach(r => d.competenze.push({ n: r.n, v: r.comp, tipo: "mese", tass: "esente" }));
   // trattenute personali fisse
-  body.filter(r => r.tratt != null && r.comp == null && !paired.has(r) && !/IMP\.?\s?SOST|IRPEF|IMPOSTA|ADDIZ|INPS|PREVAER/i.test(r.n)).forEach(r => d.tratt.push({ n: r.n.replace(/^Trat+\.?\s*/i, "").replace(/Parcheggi/i, "Parcheggio") || r.n, v: r.tratt }));
+  body.filter(r => r.tratt != null && r.comp == null && !paired.has(r) && !/IMP\.?\s?SOST|IRPEF|IMPOSTA|ADDIZ|INPS|PREVAER|\bIVS\b|CONTRIB|FPLD|FONDO|COMETA|FON\.?TE|RITENUTA|CONGUAGLIO|ARROTOND/i.test(r.n)).forEach(r => d.tratt.push({ n: r.n.replace(/^Trat+\.?\s*/i, "").replace(/Parcheggi/i, "Parcheggio") || r.n, v: r.tratt }));
   // addizionali e detrazioni (calcolo dettagliato)
-  const add = R.filter(r => r.sec === "addiz" && r.tratt != null).reduce((s, r) => s + r.tratt, 0); if (add) d.voci.addiz = Math.round(add * 100) / 100;
+  const add = R.filter(r => (r.sec === "addiz" || /ADDIZ/i.test(r.n)) && r.tratt != null).reduce((s, r) => s + r.tratt, 0); if (add) d.voci.addiz = Math.round(add * 100) / 100;
   if (z.totali["Detrazioni"]) d.voci.detr = z.totali["Detrazioni"];
   if (sostR) d.voci.sost = 15;
+  const bp = body.find(r => /BUONI? PASTO|TICKET/i.test(r.n) && r.unit > 2 && r.unit < 20); if (bp) d.voci.buonoVal = bp.unit;
   if (pt < 100) { d.voci.parttime = pt; d.voci.fissoEffettivo = 1; d.voci.soglia = Math.round(8 * pt / 100 * 100) / 100; }
   // netto %: (netto + trattenute personali − esenti) / (lordo − coppie − esenti)
   const es = d.competenze.filter(c => c.tass === "esente").reduce((s, c) => s + c.v, 0), pairSum = [...paired].filter(r => r.comp != null).reduce((s, r) => s + r.comp, 0), tT = d.tratt.reduce((s, t) => s + t.v, 0);
   if (z.netto && z.totComp) { const p = (z.netto + tT - es) / (z.totComp - pairSum - es) * 100; if (p > 40 && p < 98) d.voci.nettoPerc = Math.round(p * 10) / 10; }
-  d.note = `Riconosciuta busta formato Zucchetti${pt < 100 ? `, part-time ${pt}%` : ""}. ${[...paired].length ? "Voci che si compensano (es. L.104 anticipata per conto INPS) non usate per il calcolo. " : ""}${sostSet.size ? "Voci con imposta sostitutiva 15%: " + [...sostSet].map(r => r.n).join(", ") + "." : ""}`;
+  d.note = `Riconosciuta busta ${z.formato || "a colonne"}${pt < 100 ? `, part-time ${pt}%` : ""}. ${[...paired].length ? "Voci che si compensano (es. L.104 anticipata per conto INPS) non usate per il calcolo. " : ""}${sostSet.size ? "Voci con imposta sostitutiva 15%: " + [...sostSet].map(r => r.n).join(", ") + "." : ""}`;
   return d;
 }
 
 var SALZU = null;
 function salZuDraw() {
   const box = $("salimp"), d = SALZU; if (!box || !d) return;
-  const L = { livello: "Livello", fisso: "Retribuzione fissa del mese €", pagaOra: "Paga oraria €", soglia: "Ore ordinarie al giorno", percNott: "Notturno +%", percDom: "Domenica +%", percFest: "Festivo +%", percStr: "Straordinario +%", percStrNott: "Straord. notturno +%", percStrFest: "Straord. festivo +%", inps: "Contributi INPS %", fondoPerc: "Fondo pensione %", fondoBase: "Fondo pensione: base €", addiz: "Addizionali al mese €", detr: "Detrazioni al mese €", sost: "Imposta sostitutiva %", nettoPerc: "Netto ≈ % del lordo", parttime: "Part-time %" };
+  const dt = $("salcfg"); if (dt && !dt.open) { dt.open = true; setTimeout(() => box.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }
+  const L = { livello: "Livello", fisso: "Retribuzione fissa del mese €", pagaOra: "Paga oraria €", soglia: "Ore ordinarie al giorno", percNott: "Notturno +%", percDom: "Domenica +%", percFest: "Festivo +%", percStr: "Straordinario +%", percStrNott: "Straord. notturno +%", percStrFest: "Straord. festivo +%", inps: "Contributi INPS %", fondoPerc: "Fondo pensione %", fondoBase: "Fondo pensione: base €", addiz: "Addizionali al mese €", detr: "Detrazioni al mese €", sost: "Imposta sostitutiva %", nettoPerc: "Netto ≈ % del lordo", parttime: "Part-time %", percNottDom: "Notte domenica +%", percNottFest: "Notte festiva +%", buonoVal: "Buono pasto €" };
   const f = v => typeof v === "number" ? v.toLocaleString("it-IT", { maximumFractionDigits: 4 }) : esc(String(v));
   box.innerHTML = `<div class="ovbox" style="margin:8px 0"><b>📄 Busta ${d.mese ? esc(d.mese) : ""} riconosciuta: ${d.righe.length} righe</b>
     <p class="muted" style="font-size:12px">Letta solo su questo telefono. ${esc(d.note)}</p>
-    <table class="saltab">${Object.entries(d.voci).filter(([k]) => L[k]).map(([k, v]) => `<tr><td>${L[k]}</td><td>${f(v)}</td></tr>`).join("")}
+    <table class="saltab">${Object.entries(d.voci).filter(([k, v]) => L[k] && v != null && v !== "").map(([k, v]) => `<tr><td>${L[k]}</td><td>${f(v)}</td></tr>`).join("")}
     ${d.competenze.map(c => `<tr><td>➕ ${esc(c.n)} <span class="muted">(${c.tipo === "giorno" ? "a giorno" : c.tipo === "ora" ? "a ora" : "al mese"}${c.tass === "sost" ? ", 15%" : c.tass === "esente" ? ", esente" : ""})</span></td><td>${f(c.v)}</td></tr>`).join("")}
     ${d.tratt.map(t => `<tr><td>➖ ${esc(t.n)}</td><td>${f(t.v)}</td></tr>`).join("")}
     <tr><td><b>Totale competenze / netto</b></td><td><b>${f(d.lordo || 0)} / ${f(d.netto || 0)}</b></td></tr></table>
     <div class="stbtn"><button class="btn" id="salzuok">Importa tutto</button><button class="btn ghost" id="salzux">Annulla</button></div></div>`;
   $("salzux").onclick = () => { SALZU = null; box.innerHTML = ""; };
   $("salzuok").onclick = () => { const dd = SALZU; SALZU = null; const o = document.createElement("div"); impBusta(dd, o); const m = $("salimp"); if (m) m.innerHTML = o.innerHTML; };
+}
+
+function salWordsToRows(ws) {
+  ws = ws.filter(w => w.s && w.s.trim()); if (!ws.length) return [];
+  const hs = ws.map(w => w.y1 - w.y0).sort((a, b) => a - b), h = hs[Math.floor(hs.length / 2)] || 10, rows = [];
+  ws.sort((a, b) => (a.y0 + a.y1) - (b.y0 + b.y1)).forEach(w => { const yc = (w.y0 + w.y1) / 2; let r = rows.find(r => Math.abs(r.y - yc) < h * 0.6); if (!r) rows.push(r = { y: yc, it: [] }); r.it.push({ x0: w.x0, x1: w.x1, s: w.s.replace(/[|]/g, "").trim() }); });
+  // scala a una pagina larga ~595 punti come i PDF
+  rows.forEach(r => { r.it.sort((a, b) => a.x0 - b.x0); for (let i = 0; i < r.it.length - 1; i++) { const a = r.it[i], b = r.it[i + 1]; if (/\d,$/.test(a.s) && /^\d{2,5}$/.test(b.s) && b.x0 - a.x1 < (a.x1 - a.x0)) { a.s += b.s; a.x1 = b.x1; r.it.splice(i + 1, 1); i--; } } });
+  const W = Math.max(...ws.map(w => w.x1)), k = 595 / W; rows.forEach(r => { r.y *= k; r.it.forEach(i => { i.x0 *= k; i.x1 *= k; }); r.it = r.it.filter(i => i.s); r.it.sort((a, b) => a.x0 - b.x0); r.t = r.it.map(i => i.s).join(" "); });
+  return rows.sort((a, b) => a.y - b.y);
+}
+
+function salPrep(c) { // raddrizza, ingrandisce, scala di grigi, contrasto e soglia: numeri molto più leggibili
+  try { c = ocrDeskew(c); } catch (e) {}
+  const k = Math.min(2, 4200 / Math.max(c.width, c.height)), o = document.createElement("canvas"); o.width = Math.round(c.width * k); o.height = Math.round(c.height * k);
+  const g = o.getContext("2d"); g.imageSmoothingQuality = "high"; g.drawImage(c, 0, 0, o.width, o.height);
+  const im = g.getImageData(0, 0, o.width, o.height), d = im.data, H = new Array(256).fill(0);
+  for (let i = 0; i < d.length; i += 4) { const v = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0; d[i] = v; H[v]++; }
+  const n = d.length / 4; let a = 0, lo = 0, hi = 255; for (let v = 0; v < 256; v++) { a += H[v]; if (a > n * 0.01) { lo = v; break; } } a = 0; for (let v = 255; v >= 0; v--) { a += H[v]; if (a > n * 0.01) { hi = v; break; } }
+  // soglia adattiva (media locale): regge anche le intestazioni su fondo grigio
+  const W = o.width, Hh = o.height, G = new Float32Array(W * Hh); for (let i = 0, j = 0; i < d.length; i += 4, j++) G[j] = Math.max(0, Math.min(255, (d[i] - lo) * 255 / Math.max(1, hi - lo)));
+  const I = new Float64Array((W + 1) * (Hh + 1)); for (let y = 1; y <= Hh; y++) { let row = 0; for (let x = 1; x <= W; x++) { row += G[(y - 1) * W + x - 1]; I[y * (W + 1) + x] = I[(y - 1) * (W + 1) + x] + row; } }
+  const R = Math.max(12, Math.round(W / 60));
+  for (let y = 0; y < Hh; y++) { const y0 = Math.max(0, y - R), y1 = Math.min(Hh, y + R + 1); for (let x = 0; x < W; x++) { const x0 = Math.max(0, x - R), x1 = Math.min(W, x + R + 1), A = (y1 - y0) * (x1 - x0), m = (I[y1 * (W + 1) + x1] - I[y0 * (W + 1) + x1] - I[y1 * (W + 1) + x0] + I[y0 * (W + 1) + x0]) / A, v = G[y * W + x] < m * 0.82 && G[y * W + x] < 215 ? 0 : 255, i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; } }
+  g.putImageData(im, 0, 0); return o;
 }
 
 // ================= PROFILO + MEMORIA =================
