@@ -3951,7 +3951,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 60</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 61</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
@@ -4350,6 +4350,8 @@ function renderCar() {
   el.innerHTML = `<div class="carbig"><label class="btn" style="cursor:pointer;font-size:17px;padding:16px 20px">📥 Carica un documento<input type="file" id="caruno" accept="application/pdf,image/*,.xlsx,.xls,.csv" multiple hidden></label>
       <div class="muted" style="font-size:13px;margin-top:8px">Griglia dei turni o busta paga, in PDF, foto o Excel: l'app capisce da sola cos'è e lo mette al posto giusto. Se ricarichi un mese già caricato, sostituisce quello vecchio.</div><div id="carmsg" class="muted" style="margin-top:6px"></div><div class="stbtn" style="justify-content:center;margin-top:6px"><label class="btn ghost" for="stfile" id="carst">📋 Statino del giorno (foto)</label></div></div>
     <details class="carmore" id="carmore"><summary>Altri modi: rotazione a squadre, griglia annuale, orario fisso, a mano</summary><div class="muted" style="font-size:12px;margin-top:8px">Hai un codice preparato dal Lettore Claude? <a href="#" id="carlet">Incollalo qui</a>.</div></details>
+    <div class="carb"><h3>👥 Turni di altre persone</h3><div class="muted" style="font-size:13px">Amici, familiari, colleghi di altri settori: carica la loro griglia o imposta il loro orario. Non finiscono tra i tuoi turni: li trovi in 🎉 Uscite → Confronta turni e Incroci.${(() => { const o = FIX.filter(f => !(P.name && sameP(f.nome, P.name))).map(f => esc(f.nome)); return o.length ? `<br>Già inseriti: <b>${o.join(", ")}</b>` : ""; })()}</div>
+      <div class="stbtn" style="margin-top:6px"><label class="btn ghost" style="cursor:pointer">📄 Carica la loro griglia<input type="file" id="caraltri" accept="application/pdf,image/*,.xlsx,.xls,.csv" multiple hidden></label><button class="btn ghost" id="carfixo">🔁 Orario fisso o a ciclo</button></div></div>
     ${FIX.length ? `<div class="carb"><h3>🗂️ Rotazioni e orari salvati (${FIX.length})</h3><div class="muted" style="font-size:13px">${FIX.map(f => esc(f.nome)).join(", ")}</div><div class="stbtn"><button class="btn ghost" id="carfix">Vedi, modifica o elimina</button></div></div>` : ""}`;
   if (!window.__xpObs && $("xpanel")) { window.__xpObs = new MutationObserver(() => document.body.classList.toggle("xp-open", !!$("xpanel").textContent.trim())); window.__xpObs.observe($("xpanel"), { childList: true, subtree: true, characterData: true }); }
   $("carmore").ontoggle = () => document.body.classList.toggle("carmore-open", $("carmore").open);
@@ -4365,6 +4367,8 @@ function renderCar() {
   };
   $("carlet").onclick = e => { e.preventDefault(); impPanel(); };
   $("carst").onclick = () => { showTab("st"); };
+  $("caraltri").onchange = async e => { const fs = [...e.target.files]; e.target.value = ""; if (!fs.length) return; $("carmsg").textContent = "📄 Carico la griglia: poi scrivi il nome della persona se te lo chiedo."; await loadFiles(fs); const x = $("xpanel"); if (x && x.textContent.trim()) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  $("carfixo").onclick = () => { openFix(null, { nome: "", gruppo: "ALTRE PERSONE" }); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
   if ($("carfix")) $("carfix").onclick = () => { openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
 }
 })();
