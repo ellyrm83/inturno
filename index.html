@@ -3231,7 +3231,7 @@ function salDet(a, MM) {
 }
 function salCfgHtml() {
   const C = SAL.cfg, f = (k, l, ph, cls, txt) => `<div class="${cls || ""}"><label>${l}</label><input data-sc="${k}" ${txt ? "" : 'inputmode="decimal"'} value="${esc(C[k] == null ? "" : C[k])}" placeholder="${ph || ""}"></div>`;
-  return `<div class="stbtn" style="margin:4px 0"><label class="btn" style="cursor:pointer">📄 Importa la busta paga (PDF o foto)<input type="file" id="salpdf" accept="application/pdf,image/*" hidden></label></div><div id="salimp"></div><p class="muted" style="font-size:13px">Oppure copia le voci dal tuo cedolino: ogni busta è diversa (livello, maggiorazioni, indennità, cessione del quinto…). Lascia vuoto quello che non hai.</p>
+  return `<div class="stbtn" style="margin:4px 0"><button class="btn ghost" id="salgocar">📥 Carica la busta paga (dalla pagina Carica)</button></div><div id="salimp"></div><p class="muted" style="font-size:13px">Oppure copia le voci dal tuo cedolino: ogni busta è diversa (livello, maggiorazioni, indennità, cessione del quinto…). Lascia vuoto quello che non hai.</p>
     <div class="ovtypes" style="margin-top:6px"><span class="chip ${C.mode !== "dettagliato" ? "sel" : ""}" data-sm="semplice">Calcolo semplice</span><span class="chip ${C.mode === "dettagliato" ? "sel" : ""}" data-sm="dettagliato">Calcolo dettagliato</span></div>
     <div class="sec">Retribuzione</div><div class="fgrid">${f("livello", "Livello / qualifica", "es. 4° livello", "", 1)}${f("fisso", "Retribuzione mensile lorda €", "es. 1650")}${f("pagaOra", "Paga oraria lorda €", "es. 10,50")}${f("soglia", "Ore ordinarie massime al giorno", "8")}</div>
     <div class="sec">Maggiorazioni sulle ore di turno (+%)</div><div class="fgrid">${f("percNott", "Notturno", "es. 25")}${f("percDom", "Domenica", "es. 30")}${f("percFest", "Festivo", "es. 50")}${f("percNottDom", "Notte di domenica", "se vuoto: somma")}${f("percNottFest", "Notte festiva", "se vuoto: somma")}${f("patrono", "Patrono (giorno/mese)", "es. 29/6", "", 1)}</div>
@@ -3263,6 +3263,7 @@ function salCfgBind(out) {
   out.querySelectorAll("[data-tpre]").forEach(b => b.onclick = () => { C.tratt = C.tratt || []; C.tratt.push({ n: b.dataset.tpre, v: "", tipo: "fisso" }); re(); });
   $("salpost").onchange = e => { C.posticipo = e.target.checked; re(); };
   document.querySelectorAll("[data-bdel]").forEach(b => b.onclick = () => { if (SAL.buste) { delete SAL.buste[b.dataset.bdel]; salSave(); renderSal(); } });
+  if ($("salgocar")) $("salgocar").onclick = () => { try { showTab("car"); renderCar(); } catch (e) {} };
   if ($("salpdf")) $("salpdf").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) salImport(f); };
   if (SALIMP) { salImpDraw(); const d = $("salcfg"); if (d) d.open = true; }
   if (SALZU) { salZuDraw(); const d = $("salcfg"); if (d) d.open = true; }
@@ -3725,7 +3726,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 42</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 43</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
