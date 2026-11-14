@@ -1429,7 +1429,9 @@ function impBusta(d, out) {
   if ((d.righe || []).length) { SAL.buste = SAL.buste || {}; const mk = /^(\d{1,2})\/(\d{4})$/.test(d.mese || "") ? d.mese.replace(/^(\d{1,2})\/(\d{4})$/, (m, a, b) => b + "-" + a.padStart(2, "0")) : "ultima"; SAL.buste[mk] = { righe: d.righe, lordo: d.lordo, netto: d.netto, totali: d.totali || {}, note: d.note || "" }; }
   C.on = true; salSave();
   out.innerHTML = `<p class="muted">✓ Busta paga importata: ${n} voci per il calcolo${(d.righe || []).length ? ` e tutte le ${d.righe.length} righe della busta` : ""}. Le trovi in 💰 Stipendio: la busta completa in 📑 Buste importate, le voci del calcolo in ⚙️ Dati della busta paga, dove puoi correggerle. I dati restano solo su questo telefono.</p>`;
+  try { localStorage.setItem(SALKEY || SALK(), JSON.stringify(SAL)); } catch (e) {}
   try { renderAll(); } catch (e) {}
+  setTimeout(() => { try { setMode("turni"); showTab("sal"); const B = document.querySelector("details.more:has(.salbusta)"); if (B) { B.open = true; const f = B.querySelector(".salbusta"); if (f) f.open = true; B.scrollIntoView({ behavior: "smooth", block: "start" }); } else window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {} }, 1500);
 }
 function impTurni(d, out) {
   const g = d.giorni || {}, keys = Object.keys(g).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
@@ -3000,7 +3002,7 @@ setTimeout(() => { let m = null; try { m = localStorage.getItem("turni.modo"); }
 const SALK = () => { let u = ""; try { u = ST.uid || ""; } catch (e) {} return "inturno.stip." + (u || "locale"); };
 const SAL_DEF = () => ({ cfg: { on: false, mode: "semplice", livello: "", fisso: "", pagaOra: "", soglia: 8, percAll: 0, percStr: "", percStrNott: "", percStrFest: "", percNott: "", percDom: "", percFest: "", percNottDom: "", percNottFest: "", ind1: "", ind1n: "Indennità turno", ind2: "", ind2n: "Altra indennità", voci: [], buonoVal: "", nettoPerc: 72, inps: 9.19, sost: 15, fondoBase: "", fondoPerc: "", detr: "", addiz: "", l207: "", tratt: [], posticipo: false, patrono: "", pin: "" }, mesi: {} });
 let SALLIVE = null, SAL = SAL_DEF(), SALT = false, SALU = false, SALM = null, SALKEY = "";
-function salLoad() { if (SALKEY === SALK()) return; SALKEY = SALK(); SAL = SAL_DEF(); try { const o = JSON.parse(localStorage.getItem(SALK()) || "null"); if (o) { SAL.cfg = Object.assign(SAL.cfg, o.cfg || {}); SAL.mesi = o.mesi || {}; } } catch (e) {} }
+function salLoad() { if (SALKEY === SALK()) return; SALKEY = SALK(); SAL = SAL_DEF(); try { const o = JSON.parse(localStorage.getItem(SALK()) || "null"); if (o) { SAL.cfg = Object.assign(SAL.cfg, o.cfg || {}); SAL.mesi = o.mesi || {}; SAL.buste = o.buste || {}; } } catch (e) {} }
 let salTm = null; function salSave() { clearTimeout(salTm); const k = SALKEY || SALK(); salTm = setTimeout(() => { try { localStorage.setItem(k, JSON.stringify(SAL)); } catch (e) {} }, 300); }
 const nz = v => { const x = parseFloat(String(v == null ? "" : v).replace(",", ".")); return isFinite(x) ? x : 0; };
 const eur = v => (Math.round(v * 100) / 100).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
