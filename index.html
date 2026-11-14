@@ -1544,6 +1544,11 @@ function stParseProg(rows) {
     if (g) v.gate = g; if (mx) v.note = "max " + mx;
     d.voli.push(v);
   }
+  // pausa scritta a penna in fondo: un orario oppure CTC (contattare il responsabile)
+  { let lastF = -1; L.forEach((t, i) => { if (RE.test(t) || (RE2.test(t) && /\/\s*\d{3,4}/.test(t))) lastF = i; });
+    const tail = L.slice(lastF + 1);
+    if (tail.some(t => /\bC\s?T\s?C\b/.test(t))) d.pausa = "CTC";
+    else for (const t of tail) { const m = t.match(/\b([01]?\d|2[0-3])\s?[:.]?\s?([0-5]\d)\b/); if (m && !/\d{5,}/.test(t) && t.trim().split(/\s+/).length <= 4) { const x = hm(m[1] + m[2]); const inT = !d.inizio || !d.fine || (d.inizio <= d.fine ? x >= d.inizio && x <= d.fine : x >= d.inizio || x <= d.fine); if (x && inT) { d.pausa = x; break; } } } }
   const tm2 = all.match(/TERMINAL\s*([1-5])|\bT\s?([1-5])\b(?!\d)/); if (tm2) d.terminal = "T" + (tm2[1] || tm2[2]);
   return d.voli.length || d.inizio ? d : null;
 }
@@ -1558,7 +1563,7 @@ function stNowList() {
     if (!cur && !inR(st.inizio, st.fine)) { return; }
     if (!cur) next = vs.filter(v => (v.dalle || "") > hm).sort((a, b) => (a.dalle || "").localeCompare(b.dalle || ""))[0];
     const T = (cur && cur.terminal) || st.terminal || (next && next.terminal) || "";
-    out.push({ nome, me, T: String(T).toUpperCase().replace(/^TERMINAL\s*/, "T").replace(/^(\d)$/, "T$1"), cur, next, fine: st.fine });
+    out.push({ nome, me, st, T: String(T).toUpperCase().replace(/^TERMINAL\s*/, "T").replace(/^(\d)$/, "T$1"), cur, next, fine: st.fine });
   };
   take(P.name || "Io", ST.list.find(e => e.data === iso), true);
   try { for (const [g, map] of CC.gdata) for (const [u, d] of map) { if (u === (ST.uid || "")) continue; const nm = (d && d.nome) || ""; if (!nm || out.some(o => o.nome === nm)) continue; take(nm, d && d.statini && d.statini[iso], false); } } catch (e) {}
@@ -1567,7 +1572,7 @@ function stNowList() {
 function stMapHtml() {
   const L = stNowList(); if (!L.length) return `<p class="muted" style="font-size:13px">Adesso nessuno è in turno con uno statino salvato. Quando tu o le colleghe dei tuoi gruppi salvate lo statino con il terminal, qui vedete chi c'è e dove.</p>`;
   const me = L.find(x => x.me), Ts = [...new Set(L.map(x => x.T || "?"))].sort();
-  const who = x => { const a = x.cur || x.next; return `<div class="mpp ${x.me ? "me" : ""}"><b>${esc(x.me ? "Tu" : x.nome.split(/[ ,]+/).filter(Boolean).slice(-1)[0] || x.nome)}</b><span>${a ? esc([a.attivita, a.volo].filter(Boolean).join(" · ")) : "in turno"}${a && a.postazione ? " · " + esc(a.postazione) : ""}${a && a.gate ? " · Gate " + esc(a.gate) : ""}</span><span class="muted">${x.cur ? `fino alle ${esc(x.cur.alle || x.cur.partenza || "")}` : x.next ? `dalle ${esc(x.next.dalle || "")}` : x.fine ? `fino alle ${esc(x.fine)}` : ""}</span>${!x.me && me && me.T && x.T ? `<span class="mpd ${x.T === me.T ? "near" : ""}">${x.T === me.T ? "nel tuo terminal" : "altro terminal"}</span>` : ""}</div>`; };
+  const who = x => { const a = x.cur || x.next; return `<div class="mpp ${x.me ? "me" : ""}"><b>${esc(x.me ? "Tu" : x.nome.split(/[ ,]+/).filter(Boolean).slice(-1)[0] || x.nome)}</b><span>${a ? esc([a.attivita, a.volo].filter(Boolean).join(" · ")) : "in turno"}${a && a.postazione ? " · " + esc(a.postazione) : ""}${a && a.gate ? " · Gate " + esc(a.gate) : ""}</span><span class="muted">${x.st && x.st.pausa ? `<span class="muted">☕ ${x.st.pausa === "CTC" ? "pausa: chiedere al responsabile" : "pausa alle " + esc(x.st.pausa)}</span>` : ""}${x.cur ? `fino alle ${esc(x.cur.alle || x.cur.partenza || "")}` : x.next ? `dalle ${esc(x.next.dalle || "")}` : x.fine ? `fino alle ${esc(x.fine)}` : ""}</span>${!x.me && me && me.T && x.T ? `<span class="mpd ${x.T === me.T ? "near" : ""}">${x.T === me.T ? "nel tuo terminal" : "altro terminal"}</span>` : ""}</div>`; };
   return `<div class="mpw">${Ts.map(T => `<div class="mpt ${me && me.T === T ? "mine" : ""}"><div class="mph">${T === "?" ? "Terminal non indicato" : "🛫 " + esc(T)}</div>${L.filter(x => (x.T || "?") === T).map(who).join("")}</div>`).join("")}</div>
     <p class="muted" style="font-size:11px;margin:6px 0 0">Nessun GPS: la posizione viene dal terminal scritto nello statino, e la vedono solo i gruppi con cui condividi.</p>`;
 }
@@ -1578,6 +1583,7 @@ setInterval(() => { if (document.body.dataset.tab === "st") stMapRender(); }, 60
 const STREM = new Set();
 setInterval(() => { try {
   const now = new Date(), iso = isoDay(now), st = ST.list.find(e => e.data === iso); if (!st) return;
+  if (st.pausa && /^\d{2}:\d{2}$/.test(st.pausa)) { const [h, m] = st.pausa.split(":").map(Number), t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m), diff = (t - now) / 60000, k = iso + "pausa" + st.pausa; if (diff > 0 && diff <= 5 && !STREM.has(k)) { STREM.add(k); ntfSend(`☕ Tra ${Math.ceil(diff)} min: pausa`, "alle " + st.pausa, "st-" + k); } }
   for (const v of st.voli || []) { if (!v.dalle) continue; const [h, m] = v.dalle.split(":").map(Number), t = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m), diff = (t - now) / 60000, k = iso + v.dalle + (v.volo || "");
     if (diff > 0 && diff <= 10 && !STREM.has(k)) { STREM.add(k); ntfSend(`⏰ Tra ${Math.ceil(diff)} min: ${[v.attivita, v.volo].filter(Boolean).join(" ") || "attività"}`, [v.gate ? "Gate " + v.gate : "", v.postazione || "", v.terminal || st.terminal || "", `dalle ${v.dalle}${v.alle ? " alle " + v.alle : ""}`, v.partenza ? "partenza " + v.partenza : ""].filter(Boolean).join(" · "), "st-" + k); } }
 } catch (e) {} }, 30000);
@@ -1586,6 +1592,7 @@ function stIcs(e) {
   const d = new Date(e.data + "T12:00"), toH = x => { const [h, m] = String(x).split(":").map(Number); return h + m / 60; }, evs = [];
   for (const v of e.voli || []) { if (!v.dalle && !v.partenza) continue; const a = toH(v.dalle || v.partenza); let b = v.alle ? toH(v.alle) : a + 0.5; if (b < a) b += 24;
     evs.push(calIcs({ titolo: [v.attivita || "Volo", v.volo, v.gate ? "Gate " + v.gate : ""].filter(Boolean).join(" · "), data: d, inizio: a, fine: b, nota: [v.destinazione, v.terminal || e.terminal, v.postazione, v.partenza ? "STD " + v.partenza : ""].filter(Boolean).join(" · ") })); }
+  if (e.pausa && /^\d{2}:\d{2}$/.test(e.pausa)) { const a = toH(e.pausa); evs.push(calIcs({ titolo: "☕ Pausa", data: d, inizio: a, fine: a + 0.25, nota: "dallo statino" })); }
   if (!evs.length) return null;
   const body = evs.map(x => x.slice(x.indexOf("BEGIN:VEVENT"), x.indexOf("END:VEVENT") + 10).replace("TRIGGER:-PT2H", "TRIGGER:-PT10M")).join("\r\n");
   return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//InTurno//IT", "METHOD:PUBLISH", body, "END:VCALENDAR"].join("\r\n");
@@ -2445,7 +2452,7 @@ function myPayload() {
   }
   const y = new Date(Date.now() - 864e5); const from = isoDay(y);
   const statini = {};
-  ST.list.filter(e => e.data && e.data >= from).forEach(e => { statini[e.data] = { turno: e.turno || "", inizio: e.inizio || "", fine: e.fine || "", terminal: e.terminal || "", voli: (e.voli || []).slice(0, 40), note: e.note || "" }; });
+  ST.list.filter(e => e.data && e.data >= from).forEach(e => { statini[e.data] = { turno: e.turno || "", inizio: e.inizio || "", fine: e.fine || "", terminal: e.terminal || "", pausa: e.pausa || "", voli: (e.voli || []).slice(0, 40), note: e.note || "" }; });
   return { nome: P.name || "", turni, mods, statini, occupato: occOf() };
 }
 function publishSoon() { clearTimeout(CC.timer); CC.timer = setTimeout(publishMine, 1500); }
@@ -3849,7 +3856,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 50</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 51</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
@@ -4172,6 +4179,7 @@ function renderDraft(msg) {
    <div><label>Turno</label><input data-k="turno" value="${v(d.turno)}" placeholder="es. F23"></div>
    <div><label>Inizio</label><input type="time" data-k="inizio" value="${v(d.inizio)}"></div>
    <div><label>Fine</label><input type="time" data-k="fine" value="${v(d.fine)}"></div>
+   <div class="full"><label>☕ Pausa (scritta a penna in fondo)</label><div class="chips" style="margin:0"><input type="time" data-k="pausa" value="${v(/^\d{2}:\d{2}$/.test(d.pausa || "") ? d.pausa : "")}" style="width:120px;display:inline-block"><span class="chip ${d.pausa === "CTC" ? "sel" : ""}" data-ctc="1">CTC · contattare il responsabile</span></div></div>
    <div class="full"><label>Terminal</label><div class="chips">${["T1", "T3"].map(t => `<span class="chip ${d.terminal === t ? "sel" : ""}" data-term="${t}">🛫 ${t}</span>`).join("")}<input data-k="terminal" value="${v(d.terminal)}" placeholder="altro" style="width:90px;display:inline-block"></div></div></div>
    <div class="sec">Voli e attività</div><div id="fls">`;
   d.voli.forEach((f, i) => {
@@ -4184,6 +4192,7 @@ function renderDraft(msg) {
   $("stedit").innerHTML = h;
   $("stedit").querySelectorAll("[data-k]").forEach(el => el.oninput = () => { d[el.dataset.k] = el.value; });
   $("stedit").querySelectorAll(".fl").forEach(fl => fl.querySelectorAll("[data-f]").forEach(el => el.oninput = () => { d.voli[+fl.dataset.i][el.dataset.f] = el.value; }));
+  $("stedit").querySelectorAll("[data-ctc]").forEach(c => c.onclick = () => { d.pausa = d.pausa === "CTC" ? "" : "CTC"; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-fterm]").forEach(c => c.onclick = () => { const [i, t] = c.dataset.fterm.split("|"); d.voli[+i].terminal = d.voli[+i].terminal === t ? "" : t; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-term]").forEach(c => c.onclick = () => { d.terminal = c.dataset.term; d.voli.forEach(f => { f.terminal = c.dataset.term; }); renderDraft(msg); });
   $("stedit").querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { d.voli.splice(+b.dataset.rm, 1); if (!d.voli.length) d.voli.push({}); renderDraft(msg); });
@@ -4223,7 +4232,7 @@ function renderStList() { try { stMapRender(); } catch (e) {}
   if (!shown.length) { $("stlist").innerHTML = `<p class="muted">${ST.list.length ? "Nessun risultato." : "Nessuno statino salvato."}</p>`; return; }
   $("stlist").innerHTML = shown.map(e => `<div class="entry"><h3><span>${esc(fmtDate(e.data))}${e.turno ? ` · <span class="pill">${esc(e.turno)}</span>` : ""}</span>
      <span><button class="mini" data-stcal="${esc(e.id)}">⏰ Promemoria</button> <button class="mini" data-ed="${esc(e.id)}">Modifica</button> <button class="mini" data-del="${esc(e.id)}">Elimina</button></span></h3>
-     ${e.inizio || e.fine ? `<div class="muted">${esc(e.inizio || "?")}–${esc(e.fine || "?")}</div>` : ""}
+     ${e.inizio || e.fine ? `<div class="muted">${esc(e.inizio || "?")}–${esc(e.fine || "?")}${e.pausa ? ` · ☕ ${e.pausa === "CTC" ? "pausa: contattare il responsabile" : "pausa alle " + esc(e.pausa)}` : ""}</div>` : ""}
      ${(e.voli || []).map(f => `<div class="fli"><span class="t">${esc(f.dalle || "")}${f.alle ? "–" + esc(f.alle) : ""}</span><span><b>${esc(f.volo || f.attivita || "Attività")}</b>${f.destinazione ? " " + esc(f.destinazione) : ""}${f.partenza ? " · part. " + esc(f.partenza) : ""}${f.volo && f.attivita ? " · " + esc(f.attivita) : ""}${f.postazione ? " · " + esc(f.postazione) : ""}${f.gate ? " · <b>Gate " + esc(f.gate) + "</b>" : ""}${f.terminal ? " · " + esc(f.terminal) : ""}${f.note ? `<br><span class="muted">${esc(f.note)}</span>` : ""}</span></div>`).join("")}
      ${e.note ? `<div class="muted" style="margin-top:4px">${esc(e.note)}</div>` : ""}</div>`).join("");
   $("stlist").querySelectorAll("[data-ed]").forEach(b => b.onclick = () => { const e = ST.list.find(x => x.id === b.dataset.ed); ST.draft = JSON.parse(JSON.stringify(e)); if (!ST.draft.voli || !ST.draft.voli.length) ST.draft.voli = [{}]; ST.img = null; renderDraft(""); $("stedit").scrollIntoView({ behavior: "smooth" }); });
