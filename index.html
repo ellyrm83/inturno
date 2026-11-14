@@ -1005,14 +1005,14 @@ function codesOf(m, name) {
   const raw = m.people.get(name) || [];
   if (m._me === undefined) m._me = P.name ? findIn(m, P.name) : null;
   const mine = name === m._me && m.month;
-  return raw.map((code, i) => {
+  const __r = raw.map((code, i) => {
     const o = OV[ovKey(m, name, i)]; if (o) return withImp(applyOv(decode(code), o), name, m, i);
     let c = decode(code);
     if (mine) { const iso = isoOf(m, i);
       if (c.kind !== "riposo" && FER.periodi.some(p => iso >= p.dal && iso <= p.al)) return { kind: "ferie", label: "FER", mod: { tipo: "ferie" } };
       if (FER.mostraRot && c.kind !== "ferie" && c.kind !== "riposo" && rotHit(iso)) return { kind: "ferie", label: "FER", pred: true }; }
     return withImp(c, name, m, i);
-  });
+  }); __r.__nome = name; return __r;
 }
 async function saveOv() {
   try { localStorage.setItem("turni.modifiche", JSON.stringify(OV)); } catch {}
@@ -1655,6 +1655,36 @@ async function purgeRevoked(db, approvedIds) {
   PURGE_BUSY = false; return n;
 }
 
+// ================= LE MIE CONDIZIONI PER USCIRE (ognuno le sue, condivise con i gruppi) =================
+const COND_TIPI = ["aperitivo", "cena", "cinema", "pub"];
+function condOf(name, key) {
+  if (!name) return null; let c = null;
+  try { if (P.name && sameP(name, P.name)) c = (SET.cond || {})[key]; else for (const [g, map] of CC.gdata) for (const [u, d] of map) if (d && d.nome && sameP(d.nome, name) && d.condizioni && d.condizioni[key]) c = d.condizioni[key]; } catch (e) {}
+  return c && (c.endBy != null || c.nextFrom != null || c.nextRest) ? c : null;
+}
+function ruleFor(o, cs) { const key = Object.keys(OUT).find(k => OUT[k] === o), c = key && cs && condOf(cs.__nome, key); if (!c) return o.rule; return { endBy: c.endBy != null ? c.endBy : o.rule.endBy, nextFrom: c.nextFrom != null ? c.nextFrom : o.rule.nextFrom, nextRest: !!c.nextRest }; }
+function condPanel(box) {
+  if (!box) return; SET.cond = SET.cond || {};
+  const hm = h => h == null ? "" : String(Math.floor(h)).padStart(2, "0") + ":" + String(Math.round((h % 1) * 60)).padStart(2, "0"), toH = v => { if (!v) return null; const [a, b] = v.split(":").map(Number); return a + (b || 0) / 60; };
+  box.innerHTML = `<div class="ovbox"><b>🙋 Le mie condizioni per uscire</b>
+    <p class="muted" style="font-size:13px">Decidi tu quando te la senti. Valgono quando qualcuno dei tuoi gruppi organizza un'uscita: l'app propone solo i giorni che vanno bene a tutti, ognuno con le sue regole. Se lasci vuoto, vale la regola generale.</p>
+    ${COND_TIPI.map(k => { const o = OUT[k], c = SET.cond[k] || {}; return `<div class="carb" style="margin:8px 0"><h3 style="font-size:15px">${o.label}</h3>
+      <div class="fgrid"><div><label>Esco se finisco il turno entro le</label><input type="time" data-ce="${k}" value="${hm(c.endBy)}" placeholder="${hm(o.rule.endBy)}"></div>
+      <div><label>Il giorno dopo</label><select data-cr="${k}" style="width:100%"><option value="">regola generale</option><option value="from" ${!c.nextRest && c.nextFrom != null ? "selected" : ""}>riposo oppure turno che inizia dopo…</option><option value="rest" ${c.nextRest ? "selected" : ""}>devo essere a riposo</option></select></div>
+      <div class="${!c.nextRest && c.nextFrom != null ? "" : "hidden"}" data-cfw="${k}"><label>…le ore</label><input type="time" data-cf="${k}" value="${hm(c.nextFrom)}" placeholder="12:00"></div></div>
+      <p class="muted" style="font-size:12px;margin:4px 0 0">Regola generale: fine turno entro le ${hm(o.rule.endBy)}, il giorno dopo riposo o inizio dalle ${hm(o.rule.nextFrom)}.</p></div>`; }).join("")}
+    <div class="stbtn"><button class="btn" id="cdsave">Salva le mie condizioni</button><button class="btn ghost" id="cdx">Chiudi</button></div><p class="muted" id="cdmsg"></p></div>`;
+  box.querySelectorAll("[data-cr]").forEach(s => s.onchange = () => { const w = box.querySelector(`[data-cfw="${s.dataset.cr}"]`); w.classList.toggle("hidden", s.value !== "from"); });
+  $("cdx").onclick = () => { box.innerHTML = ""; };
+  $("cdsave").onclick = async () => {
+    const out = {}; COND_TIPI.forEach(k => { const e = toH(box.querySelector(`[data-ce="${k}"]`).value), r = box.querySelector(`[data-cr="${k}"]`).value, f = toH(box.querySelector(`[data-cf="${k}"]`).value);
+      const c = {}; if (e != null) c.endBy = e; if (r === "rest") c.nextRest = true; if (r === "from" && f != null) c.nextFrom = f; if (Object.keys(c).length) out[k] = c; });
+    SET.cond = out; try { await saveSet(); } catch (e) {} try { publishSoon(); } catch (e) {} try { renderAll(); } catch (e) {}
+    const b2 = $("agplan") || box; if (b2) b2.innerHTML = `<p class="muted">✓ Condizioni salvate${Object.keys(out).length ? "" : " (nessuna: vale la regola generale)"}. I tuoi gruppi le useranno quando organizzano un'uscita.</p>`;
+  };
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // ================= ORGANIZZA USCITA =================
 const OUT = {
   colazione: { what: "la colazione", label: "☕ Colazione", win: [7.5, 10.5], need: 1.5 },
@@ -1758,12 +1788,12 @@ function renderOut(boxArg, minP) {
 function okDay(o, cl, i, D) {
   if (o.rule) {
     for (const cs of cl) {
-      const c = cs[i], q = cs[i + 1];
+      const c = cs[i], q = cs[i + 1], R = ruleFor(o, cs);
       if (!c || c.kind === "ignoto" || (q && q.kind === "ignoto")) return false;
-      if (c && c.kind === "lavoro" && c.end > o.rule.endBy) return false;
-      if (c && c.busy && c.busy.some(([x, y]) => y > o.rule.endBy && x < 24)) return false;
-      if (i + 1 < D && q && q.kind === "lavoro" && (o.rule.nextRest || q.start < o.rule.nextFrom)) return false;
-      if (i + 1 < D && q && q.busy && q.busy.some(([x]) => x < o.rule.nextFrom)) return false;
+      if (c && c.kind === "lavoro" && c.end > R.endBy) return false;
+      if (c && c.busy && c.busy.some(([x, y]) => y > R.endBy && x < 24)) return false;
+      if (i + 1 < D && q && q.kind === "lavoro" && (R.nextRest || q.start < R.nextFrom)) return false;
+      if (i + 1 < D && q && q.busy && q.busy.some(([x]) => x < R.nextFrom)) return false;
     }
     return true;
   }
@@ -1788,7 +1818,7 @@ function findSwaps(o, ok, m) {
       for (const j of relDays(o, i)) {
         if (j < 0 || j >= D) continue;
         const orig = cs[j]; if (!orig || orig.kind !== "lavoro") continue;
-        const withC = c2 => cl.map((x, k) => k === p ? x.map((c, y) => y === j ? c2 : c) : x);
+        const withC = c2 => cl.map((x, k) => { if (k !== p) return x; const z = x.map((c, y) => y === j ? c2 : c); z.__nome = x.__nome; return z; });
         if (!okDay(o, withC({ kind: "riposo", label: "R" }), i, D)) continue; // nemmeno libera basterebbe
         const sec = m.sectorOf ? m.sectorOf.get(ok[p][0]) : null;
         const cands = [];
@@ -2509,7 +2539,7 @@ function myPayload() {
   const y = new Date(Date.now() - 864e5); const from = isoDay(y);
   const statini = {};
   ST.list.filter(e => e.data && e.data >= from).forEach(e => { statini[e.data] = { turno: e.turno || "", inizio: e.inizio || "", fine: e.fine || "", terminal: e.terminal || "", pausa: e.pausa || "", voli: (e.voli || []).slice(0, 40), note: e.note || "" }; });
-  return { nome: P.name || "", turni, mods, statini, occupato: occOf() };
+  return { nome: P.name || "", turni, mods, statini, occupato: occOf(), condizioni: SET.cond || {} };
 }
 function publishSoon() { clearTimeout(CC.timer); CC.timer = setTimeout(publishMine, 1500); }
 async function publishMine() {
@@ -2740,7 +2770,7 @@ function renderAg() {
   }
   cal += "</tr></table>";
   let h = `<h2>📅 La mia agenda</h2>${chips}
-    <div class="stbtn plbtns"><button class="btn" id="plu">🍽️ Organizza uscita</button><button class="btn ghost" id="plg">🧺 Programma gita</button><button class="btn ghost" id="plv">✈️ Programma viaggio</button></div><div id="agplan"></div>
+    <div class="stbtn plbtns"><button class="btn" id="plu">🍽️ Organizza uscita</button><button class="btn ghost" id="plg">🧺 Programma gita</button><button class="btn ghost" id="plv">✈️ Programma viaggio</button><button class="btn ghost" id="plcond">🙋 Le mie condizioni per uscire</button></div><div id="agplan"></div>
     <div class="mnav"><button class="mini" id="agp">◀</button><b>${esc(MESI[m.month - 1])} ${m.year}</b><button class="mini" id="agn">▶</button></div>
     ${cal}
     <div class="agleg">${pc.length ? `<span><i class="h3"></i>✨ incastro con tutti</span><span><i class="h2"></i>con molti</span><span><i class="h1"></i>con qualcuno</span>` : `<span class="muted">Scegli un gruppo per vedere gli incastri.</span>`}<span>📌 evento</span></div>
@@ -2750,7 +2780,7 @@ function renderAg() {
   h += `<div class="sec">📌 Eventi di ${esc(MESI[m.month - 1])}</div>` + (mev.length ? mev.map(e => `<div class="req evrow"><span><b>${esc(e.titolo)}</b><br><span class="muted">${esc(new Date(e.data + "T12:00").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" }))}${e.ora ? " · " + esc(e.ora) : ""} · ${e.priv ? "solo io" : esc(e.gname)}</span></span><span class="stbtn">${wa(evText(e))}${calBtns({ titolo: e.titolo.replace(/^\S+\s/, ""), data: new Date(e.data + "T12:00"), inizio: e.ora && /^\d{1,2}:\d{2}$/.test(e.ora) ? tHm(e.ora) : null, fine: e.ora && /^\d{1,2}:\d{2}$/.test(e.ora) ? tHm(e.ora) + 2.5 : null, giorni: e.giorni || 1, nota: e.priv ? "" : "Con " + (e.gname || "") })}<button class="mini" data-evdel="${esc(e.id)}" data-evg="${esc(e.gid || "")}">✕</button></span></div>`).join("") : `<p class="muted">Nessun evento. Tocca un giorno per organizzare.</p>`);
   out.innerHTML = h;
   bindAgChips(out);
-  $("plv").onclick = () => openPlan("viaggio"); $("plg").onclick = () => openPlan("gita"); $("plu").onclick = () => { AG.plan = { kind: "uscita", tipo: AG.plan && AG.plan.tipo || S.outType || "cena" }; drawPlan(); };
+  $("plv").onclick = () => openPlan("viaggio"); $("plg").onclick = () => openPlan("gita"); ($("plcond") && ($("plcond").onclick = () => condPanel($("agplan")))), $("plu").onclick = () => { AG.plan = { kind: "uscita", tipo: AG.plan && AG.plan.tipo || S.outType || "cena" }; drawPlan(); };
   if (AG.plan) drawPlan();
   $("agp").onclick = () => { AG.day = null; stepMonth(-1); }; $("agn").onclick = () => { AG.day = null; stepMonth(1); };
   out.querySelectorAll("[data-agd]").forEach(el => el.onclick = () => { AG.day = +el.dataset.agd; renderAg(); setTimeout(() => { const b = $("agday"); if (b) b.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 50); });
@@ -3951,7 +3981,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 62</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 63</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
