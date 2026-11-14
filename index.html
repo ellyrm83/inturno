@@ -1473,9 +1473,16 @@ function impTurni(d, out) {
 // ================= STATINO DA FOTO (letto sul telefono) =================
 async function stOcrRead(f, say) {
   const eng = await ocrEngine(say || (() => {})); if (!eng.words) throw new Error("lettore non disponibile");
-  const cvs = [].concat(await ocrCanvas(f)); let rows = [];
-  for (const cv of cvs) rows = rows.concat(salWordsToRows(await eng.words(salPrep(cv))));
-  return stParse(rows);
+  const cvs = [].concat(await ocrCanvas(f)); let best = null, bs = -1;
+  // prima una versione "morbida" (grigi e contrasto, senza soglia): con le foto vere è la più pulita
+  for (const prep of [stPrep, salPrep]) {
+    let rows = []; for (const cv of cvs) rows = rows.concat(salWordsToRows(await eng.words(prep(cv))));
+    const d = stParse(rows), sc = (d.voli || []).filter(v => v.dalle || v.partenza).length * 3 + (d.inizio ? 2 : 0) + (d.data ? 1 : 0) - (d.voli || []).filter(v => !v.dalle && !v.partenza).length * 2;
+    if (sc > bs) { bs = sc; best = d; } if ((d.voli || []).some(v => v.dalle) && d.inizio) break;
+  }
+  // turno non letto: lo prendo dalla tua griglia di quel giorno
+  if (best && !best.inizio && best.data && P.name) { try { const x = dayInfoFor(P.name, new Date(best.data + "T12:00")); const dc = x && x.c ? (typeof x.c === "object" ? x.c : decode(x.c)) : null; if (dc && dc.kind === "lavoro") { const f = h => String(Math.floor(h % 24)).padStart(2, "0") + ":" + String(Math.round((h % 1) * 60)).padStart(2, "0"); best.inizio = f(dc.start); best.fine = f(dc.end);  best.daGriglia = true; } } catch (e) {} }
+  return best;
 }
 function stParse(rows) {
   const pg = stParseProg(rows); if (pg) return pg;
@@ -1528,15 +1535,15 @@ function stParseProg(rows) {
   if (!L.some(t => RE.test(t)) && !L.some(t => RE2.test(t) && /\/\s*\d{3,4}/.test(t))) return null;
   const ACT = { CKIN: "Check-in", CK: "Check-in", "CK+GT": "Check-in + Gate", "CKIN+GT": "Check-in + Gate", GT: "Gate", GATE: "Gate", IMB: "Imbarco", BRD: "Imbarco", ARR: "Arrivi", TRF: "Transiti", TRX: "Transiti", LL: "Lost & found", LF: "Lost & found", BIG: "Biglietteria", TKT: "Biglietteria", SUP: "Supervisione", PRM: "Assistenza PRM", DOC: "Controllo documenti" };
   const d = { voli: [] }, all = L.join("\n");
-  const dm = all.match(/\b(\d{1,2})\/(\d{1,2})\/\s*(20\d\d)?/); if (dm && +dm[2] <= 12) { const y = dm[3] || (all.match(/\b(20\d\d)\b/) || [])[1] || String(new Date().getFullYear()); d.data = `${y}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`; }
-  const tl = L.find(t => /TUR[NM]O|ORARIO/.test(t) && /\d{3,4}\s*-\s*\d{3,4}/.test(t)); if (tl) { const m = tl.match(/(\d{3,4})\s*-\s*(\d{3,4})/); d.inizio = hm(m[1]); d.fine = hm(m[2]); }
+  const dm = all.match(/\b(\d{1,2})\/(\d{1,2})\/\s*(20\d\d)?/); if (dm && +dm[2] <= 12) { const cy = new Date().getFullYear(), ok = y => y && Math.abs(+y - cy) <= 1; const y = ok(dm[3]) ? dm[3] : String(Math.abs(new Date(cy, +dm[2] - 1, +dm[1]) - new Date()) > 183 * 864e5 && new Date(cy, +dm[2] - 1, +dm[1]) > new Date() ? cy - 1 : cy); d.data = `${y}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`; }
+  const tl = L.find(t => /[TM]?UR[NM]O|TURN|ORARIO/.test(t) && /\d{3,4}\s*-\s*\d{3,4}/.test(t)) || L.find(t => !/STD|\/|DATA/.test(t) && /\b([01]\d|2[0-3])[0-5]\d\s*-\s*([01]\d|2[0-3])[0-5]\d\b/.test(t)); if (tl) { const m = tl.match(/(\d{3,4})\s*-\s*(\d{3,4})/) || tl.match(/(\d{4})\D+(\d{4})/); d.inizio = hm(m[1]); d.fine = hm(m[2]); }
   if (!d.inizio) { const m = L.join(" ").match(/TUR[NM]O[^\d]{0,20}(\d{3,4})\s*-\s*(\d{3,4})/); if (m) { d.inizio = hm(m[1]); d.fine = hm(m[2]); } }
   if (!d.inizio) { const ti = L.findIndex(t => /TUR[NM]O/.test(t)); if (ti >= 0) for (const j of [ti, ti - 1, ti + 1, ti - 2, ti + 2]) { const t = L[j]; if (!t || /STD/.test(t)) continue; const m = t.match(/\b(\d{3,4})\D{1,5}(\d{3,4})\b/); if (m && hm(m[1]) && hm(m[2])) { d.inizio = hm(m[1]); d.fine = hm(m[2]); break; } } }
   if (!d.inizio) { const m = L.join(" ").match(/\b(\d{4})\s*-\s*(\d{4})\b(?!.*STD)/); if (m && hm(m[1]) && hm(m[2])) { d.inizio = hm(m[1]); d.fine = hm(m[2]); } }
   for (const t of L) {
     let m = t.match(RE); if (!m) { const m2 = t.match(RE2); if (!m2 || /TUR[NM]O|DATA/.test(t)) continue; m = [m2[0].slice(0, m2[0].indexOf(m2[3])), m2[1], m2[2], "", ""]; }
     const num = m[2].replace(/O/g, "0").replace(/[IL]/g, "1").replace(/^0+(?=\d)/, ""), code = (m[4] || "").replace(/\/$/, "");
-    const v = { volo: m[1] + " " + num, partenza: hm(m[3]) || "", attivita: ACT[code] || (code ? code : "") };
+    const v = { volo: m[1] + " " + num, partenza: hm(m[3]) || "", attivita: ACT[code] || (/^C/.test(code) ? (/G|T$/.test(code.slice(1)) ? "Check-in + Gate" : "Check-in") : /^G/.test(code) ? "Gate" : code) };
     const rest = t.slice(t.indexOf(m[0]) + m[0].length), da = rest.match(/(\d{3,4})\s*\/\s*(\d{3,4})/);
     if (da) { v.dalle = hm(da[1]) || ""; v.alle = hm(da[2]) || ""; }
     const mid = (da ? rest.slice(0, rest.indexOf(da[0])) : rest).split(/\s+/).filter(w => /^[A-Z]?\d{1,3}[A-Z]?$/.test(w));
@@ -1551,6 +1558,17 @@ function stParseProg(rows) {
     else for (const t of tail) { const m = t.match(/\b([01]?\d|2[0-3])\s?[:.]?\s?([0-5]\d)\b/); if (m && !/\d{5,}/.test(t) && t.trim().split(/\s+/).length <= 4) { const x = hm(m[1] + m[2]); const inT = !d.inizio || !d.fine || (d.inizio <= d.fine ? x >= d.inizio && x <= d.fine : x >= d.inizio || x <= d.fine); if (x && inT) { d.pausa = x; break; } } } }
   const tm2 = all.match(/TERMINAL\s*([1-5])|\bT\s?([1-5])\b(?!\d)/); if (tm2) d.terminal = "T" + (tm2[1] || tm2[2]);
   return d.voli.length || d.inizio ? d : null;
+}
+
+function stPrep(c) {
+  try { c = ocrDeskew(c); } catch (e) {}
+  const k = Math.min(1, 2200 / Math.max(c.width, c.height)), o = document.createElement("canvas"); o.width = Math.round(c.width * k); o.height = Math.round(c.height * k);
+  const g = o.getContext("2d"); g.imageSmoothingQuality = "high"; g.drawImage(c, 0, 0, o.width, o.height);
+  const im = g.getImageData(0, 0, o.width, o.height), d = im.data, H = new Array(256).fill(0);
+  for (let i = 0; i < d.length; i += 4) { const v = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000 | 0; d[i] = v; H[v]++; }
+  const n = d.length / 4; let a = 0, lo = 0, hi = 255; for (let v = 0; v < 256; v++) { a += H[v]; if (a > n * 0.02) { lo = v; break; } } a = 0; for (let v = 255; v >= 0; v--) { a += H[v]; if (a > n * 0.05) { hi = v; break; } }
+  for (let i = 0; i < d.length; i += 4) { const v = Math.max(0, Math.min(255, (d[i] - lo) * 255 / Math.max(1, hi - lo))); d[i] = d[i + 1] = d[i + 2] = v; }
+  g.putImageData(im, 0, 0); return o;
 }
 
 // ================= DOVE SIAMO ADESSO (dal terminal degli statini, senza GPS) =================
@@ -3856,7 +3874,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 51</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 52</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
@@ -4148,7 +4166,7 @@ $("stfile").addEventListener("change", async e => {
       let d = null; try { d = await stOcrRead(f, t => { const p = box.querySelector("p"); if (p) p.innerHTML = `<span class="busy"></span>${esc(t)}`; }); } catch (er) { console.warn(er); }
       const ok = d && (d.voli.length || d.inizio);
       ST.draft = Object.assign(blankDraft(), ok ? d : {}, { id: newId() }); if (!ST.draft.voli.length) ST.draft.voli = [{}];
-      renderDraft(ok ? `Letto dalla foto: ${d.voli.length} ${d.voli.length === 1 ? "volo" : "voli"}${d.inizio ? `, turno ${d.inizio}–${d.fine}` : ""}. Controlla con la foto e correggi prima di salvare.` : "Non sono riuscita a leggere la foto: compila i campi guardando l'immagine, oppure riprova con una foto più dritta e nitida.");
+      renderDraft(ok ? `Letto dalla foto: ${d.voli.length} ${d.voli.length === 1 ? "volo" : "voli"}${d.inizio ? `, turno ${d.inizio}–${d.fine}${d.daGriglia ? " (preso dalla tua griglia)" : ""}` : ""}. Controlla con la foto e correggi prima di salvare.` : "Non sono riuscita a leggere la foto: compila i campi guardando l'immagine, oppure riprova con una foto più dritta e nitida.");
       return; }
     box.innerHTML = `<img class="thumb" src="${url}"><p><span class="busy"></span>Leggo lo statino…</p>`;
     const r = await ST.sample(PROMPT, { images: [blob], modelTier: "default" });
