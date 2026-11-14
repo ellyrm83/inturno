@@ -1477,6 +1477,7 @@ async function stOcrRead(f, say) {
   return stParse(rows);
 }
 function stParse(rows) {
+  const pg = stParseProg(rows); if (pg) return pg;
   const U = s => String(s).toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const T = rows.map(r => U(r.t)), all = T.join("\n"), d = { voli: [] };
   const tm = s => { const m = String(s).match(/^(\d{1,2})[:.,](\d{2})$/); return m && +m[1] < 24 && +m[2] < 60 ? String(m[1]).padStart(2, "0") + ":" + m[2] : null; };
@@ -1514,6 +1515,33 @@ function stParse(rows) {
   }
   if (!d.inizio && d.voli.length) { const ds = d.voli.map(v => v.dalle || v.partenza).filter(Boolean).sort(), as = d.voli.map(v => v.alle || v.partenza).filter(Boolean).sort(); if (ds.length) { d.inizio = ds[0]; d.fine = as[as.length - 1]; } }
   return d;
+}
+
+// "Programma giornaliero": righe tipo  N0401-STD:1905-CKIN   1435/1730   (volo, partenza, attività, dalle/alle)
+function stParseProg(rows) {
+  const L = rows.map(r => String(r.t).toUpperCase().replace(/[|\]\[{}]/g, " ").replace(/[–—]/g, "-"));
+  const hm = x => { x = String(x).replace(/O/g, "0").replace(/[IL]/g, "1"); const m = x.match(/^(\d{1,2})(\d{2})$/); return m && +m[1] < 24 && +m[2] < 60 ? m[1].padStart(2, "0") + ":" + m[2] : null; };
+  const RE = /([A-Z0-9]{2})\s?([0-9O]{1,5}[A-Z]?)\s*-\s*S\s?T\s?D\s*[:.;,]?\s*([0-9O]{3,4})\s*-?\s*([A-Z+\/]{1,10})?/;
+  if (!L.some(t => RE.test(t))) return null;
+  const ACT = { CKIN: "Check-in", CK: "Check-in", "CK+GT": "Check-in + Gate", "CKIN+GT": "Check-in + Gate", GT: "Gate", GATE: "Gate", IMB: "Imbarco", BRD: "Imbarco", ARR: "Arrivi", TRF: "Transiti", TRX: "Transiti", LL: "Lost & found", LF: "Lost & found", BIG: "Biglietteria", TKT: "Biglietteria", SUP: "Supervisione", PRM: "Assistenza PRM", DOC: "Controllo documenti" };
+  const d = { voli: [] }, all = L.join("\n");
+  const dm = all.match(/\b(\d{1,2})\/(\d{1,2})\/\s*(20\d\d)?/); if (dm && +dm[2] <= 12) { const y = dm[3] || (all.match(/\b(20\d\d)\b/) || [])[1] || String(new Date().getFullYear()); d.data = `${y}-${dm[2].padStart(2, "0")}-${dm[1].padStart(2, "0")}`; }
+  const tl = L.find(t => /TUR[NM]O|ORARIO/.test(t) && /\d{3,4}\s*-\s*\d{3,4}/.test(t)); if (tl) { const m = tl.match(/(\d{3,4})\s*-\s*(\d{3,4})/); d.inizio = hm(m[1]); d.fine = hm(m[2]); }
+  if (!d.inizio) { const m = L.join(" ").match(/TUR[NM]O[^\d]{0,20}(\d{3,4})\s*-\s*(\d{3,4})/); if (m) { d.inizio = hm(m[1]); d.fine = hm(m[2]); } }
+  if (!d.inizio) { const ti = L.findIndex(t => /TUR[NM]O/.test(t)); if (ti >= 0) for (const j of [ti, ti - 1, ti + 1, ti - 2, ti + 2]) { const t = L[j]; if (!t || /STD/.test(t)) continue; const m = t.match(/\b(\d{3,4})\D{1,5}(\d{3,4})\b/); if (m && hm(m[1]) && hm(m[2])) { d.inizio = hm(m[1]); d.fine = hm(m[2]); break; } } }
+  if (!d.inizio) { const m = L.join(" ").match(/\b(\d{4})\s*-\s*(\d{4})\b(?!.*STD)/); if (m && hm(m[1]) && hm(m[2])) { d.inizio = hm(m[1]); d.fine = hm(m[2]); } }
+  for (const t of L) {
+    const m = t.match(RE); if (!m) continue;
+    const num = m[2].replace(/O/g, "0").replace(/^0+(?=\d)/, ""), code = (m[4] || "").replace(/\/$/, "");
+    const v = { volo: m[1] + " " + num, partenza: hm(m[3]) || "", attivita: ACT[code] || (code ? code : "") };
+    const rest = t.slice(t.indexOf(m[0]) + m[0].length), da = rest.match(/(\d{3,4})\s*\/\s*(\d{3,4})/);
+    if (da) { v.dalle = hm(da[1]) || ""; v.alle = hm(da[2]) || ""; }
+    const mid = (da ? rest.slice(0, rest.indexOf(da[0])) : rest).split(/\s+/).filter(w => /^[A-Z]?\d{1,3}[A-Z]?$/.test(w));
+    const g = mid.find(w => /[A-Z]/.test(w)) || (mid.length > 1 ? mid[1] : null), mx = mid.find(w => /^\d{1,3}$/.test(w) && w !== g);
+    if (g) v.postazione = "Gate " + g; if (mx) v.note = "max " + mx;
+    d.voli.push(v);
+  }
+  return d.voli.length || d.inizio ? d : null;
 }
 
 // ================= ORGANIZZA USCITA =================
@@ -3773,7 +3801,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 45</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 46</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
