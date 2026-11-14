@@ -314,7 +314,7 @@ h2{font-size:16px;margin:0 0 8px}
       <h2>Statini e voli</h2>
       <div class="muted" id="stinfo">Fotografa lo statino della giornata: leggo voli, orari e postazioni, tu controlli e salvi.</div>
       <div class="stbtn" style="margin-top:10px">
-        <label class="btn hidden" for="stfile" id="stbtn">📷 Aggiungi statino</label>
+        <label class="btn" for="stfile" id="stbtn">📷 Statino da foto</label>
         <input id="stfile" type="file" accept="image/*" hidden>
         <button class="btn ghost" id="stman">Inserisci a mano</button>
       </div>
@@ -1467,6 +1467,53 @@ function impTurni(d, out) {
     $("xpanel").innerHTML = `<div class="ovbox"><p class="muted" style="margin:0">✓ Calendario compilato: ${Object.keys(day).length} giorni di ${esc(f.nome)}. Tocca un mese per vedere i turni.</p></div>`;
     const mo = $("months"); if (mo) mo.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+}
+
+// ================= STATINO DA FOTO (letto sul telefono) =================
+async function stOcrRead(f, say) {
+  const eng = await ocrEngine(say || (() => {})); if (!eng.words) throw new Error("lettore non disponibile");
+  const cvs = [].concat(await ocrCanvas(f)); let rows = [];
+  for (const cv of cvs) rows = rows.concat(salWordsToRows(await eng.words(salPrep(cv))));
+  return stParse(rows);
+}
+function stParse(rows) {
+  const U = s => String(s).toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const T = rows.map(r => U(r.t)), all = T.join("\n"), d = { voli: [] };
+  const tm = s => { const m = String(s).match(/^(\d{1,2})[:.,](\d{2})$/); return m && +m[1] < 24 && +m[2] < 60 ? String(m[1]).padStart(2, "0") + ":" + m[2] : null; };
+  // data
+  const dl = T.findIndex(t => /DATA|GIORNO|DEL\b|STATINO/.test(t) && /\d{1,2}[\/.-]\d{1,2}/.test(t)); const dsrc = dl >= 0 ? T[dl] : all;
+  const dm = dsrc.match(/\b(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?\b/);
+  if (dm && +dm[2] >= 1 && +dm[2] <= 12 && +dm[1] >= 1 && +dm[1] <= 31) { const y = dm[3] ? (dm[3].length === 2 ? "20" + dm[3] : dm[3]) : String(new Date().getFullYear()); d.data = `${y}-${String(dm[2]).padStart(2, "0")}-${String(dm[1]).padStart(2, "0")}`; }
+  // turno e orario
+  for (const t of T) { if (!/TUR[NM]O|ORARIO|SERVIZIO|DALLE/.test(t)) continue; if (!d.turno) { const w = t.split(/\s+/), q = w.findIndex(x => /^TUR[NM]O:?$/.test(x)); if (q >= 0 && /^[A-Z]{1,2}\d{1,3}$/.test((w[q + 1] || "").replace(/[:;,]/g, ""))) d.turno = w[q + 1].replace(/[:;,]/g, ""); } const ts = (t.match(/\b\d{1,2}[:.]\d{2}\b/g) || []).map(tm).filter(Boolean); if (ts.length >= 2 && !d.inizio) { d.inizio = ts[0]; d.fine = ts[1]; } const c = t.match(/TURNO\s*:?\s*([A-Z]{1,2}\d{1,2})\b/); if (c && !d.turno) d.turno = c[1]; }
+  // intestazione delle colonne, se c'è
+  const HD = [["volo", /^(VOLO|VOLI|FLIGHT|FLT)$/], ["destinazione", /^(DEST\.?|DESTINAZIONE|DESTINATION|PER|TO)$/], ["partenza", /^(STD|ETD|PART\.?|PARTENZA|ORA|DEP)$/], ["attivita", /^(ATTIVITA|ATT\.?|SERVIZIO|MANSIONE|COMPITO)$/], ["postazione", /^(BANCO|BANCHI|BCO|GATE|POSTAZIONE|POS\.?|ISOLA|DESK)$/], ["dalle", /^(DALLE|INIZIO|DA|START|APERTURA)$/], ["alle", /^(ALLE|FINE|A|END|CHIUSURA)$/]];
+  let COLS = null;
+  for (const r of rows) { const cs = []; r.it.forEach(i => { const w = U(i.s).replace(/[’'`]/g, "").replace(/[:|]+$/, ""); const h = HD.find(([k, re]) => re.test(w)); if (h && !cs.some(c => c.k === h[0])) cs.push({ k: h[0], x: (i.x0 + i.x1) / 2 }); }); if (cs.length >= 3 && cs.some(c => c.k === "volo")) { COLS = cs; break; } }
+  // voli: una riga per volo
+  const ACT = /CHECK-?IN|ACCETTAZIONE|IMBARCO|GATE|ARRIVI|PARTENZE|TRANSIT|BAGAGL|LOST|BIGLIETTERIA|SUPERVIS|ASSISTENZA|PRM|DESK|BANCO/;
+  for (const r of rows) {
+    const it = r.it.map(i => U(i.s).replace(/[|,;]+$/, "")).filter(Boolean); let volo = null, k = -1;
+    for (let i = 0; i < it.length; i++) {
+      if (/^([A-Z]{2}|[A-Z]\d|\d[A-Z])-?\d{1,4}[A-Z]?$/.test(it[i]) && /\d/.test(it[i].slice(2))) { volo = it[i].replace("-", ""); k = i; break; }
+      if (/^([A-Z]{2}|[A-Z]\d|\d[A-Z])$/.test(it[i]) && /^\d{1,4}[A-Z]?$/.test(it[i + 1] || "") && !/^(ORE|DAL|AL|DA|DI|IL|LE)$/.test(it[i])) { volo = it[i] + it[i + 1]; k = i + 1; break; }
+    }
+    if (!volo || /^(\d{1,2})(\d{2})$/.test(volo) || /TUR[NM]O|DATA|ORARIO/.test(U(r.t))) continue;
+    if (COLS) { const v = { volo }; const cell = {}; r.it.forEach(i => { const xc = (i.x0 + i.x1) / 2; let best = null, bd = 1e9; for (const c of COLS) { const dd = Math.abs(c.x - xc); if (dd < bd) { bd = dd; best = c.k; } } (cell[best] = cell[best] || []).push(i.s); });
+      for (const c of COLS) { if (c.k === "volo") continue; const val = (cell[c.k] || []).join(" ").trim(); if (!val) continue; if (["partenza", "dalle", "alle"].includes(c.k)) { const t = tm(val.split(" ")[0]); if (t) v[c.k] = t; } else v[c.k] = c.k === "attivita" ? val.charAt(0) + val.slice(1).toLowerCase() : val; }
+      d.voli.push(v); continue; }
+    const times = it.map(tm).filter(Boolean).sort();
+    const rest = it.slice(k + 1).filter(w => !tm(w));
+    const dest = rest.find(w => /^[A-Z]{3}$/.test(w) && !/^(FCO|ORE|DAL|BCO|BAN|GAT)$/.test(w)) || rest.filter(w => /^[A-Z]{4,}$/.test(w) && !ACT.test(w)).slice(0, 2).join(" ");
+    const ji = it.findIndex(w => /^(BANCO|BCO|BANCHI|GATE|ISOLA|ISOLE|DESK|POS\.?|POSTAZIONE)$/.test(w));
+    const post = ji >= 0 ? (it[ji + 1] || "") : (rest.find(w => /^[A-Z]?\d{1,3}(-\d{1,3})?[A-Z]?$/.test(w) && !/^\d{3,4}$/.test(w)) || "");
+    const act = (it.find(w => ACT.test(w) && !/^(BANCO|BCO|GATE|DESK)$/.test(w)) || "");
+    const v = { volo, destinazione: dest || "", postazione: ji >= 0 && /^(GATE)$/.test(it[ji]) ? "Gate " + post : post, attivita: act ? act.charAt(0) + act.slice(1).toLowerCase() : "" };
+    if (times.length >= 3) { v.dalle = times[0]; v.alle = times[1]; v.partenza = times[times.length - 1]; } else if (times.length === 2) { v.dalle = times[0]; v.partenza = times[1]; } else if (times.length === 1) v.partenza = times[0];
+    d.voli.push(v);
+  }
+  if (!d.inizio && d.voli.length) { const ds = d.voli.map(v => v.dalle || v.partenza).filter(Boolean).sort(), as = d.voli.map(v => v.alle || v.partenza).filter(Boolean).sort(); if (ds.length) { d.inizio = ds[0]; d.fine = as[as.length - 1]; } }
+  return d;
 }
 
 // ================= ORGANIZZA USCITA =================
@@ -3726,7 +3773,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 44</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 45</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
@@ -4013,7 +4060,13 @@ $("stfile").addEventListener("change", async e => {
   try {
     const { blob, url } = await shrink(f);
     ST.img = url;
-    if (!ST.sample) { ST.draft = blankDraft(); renderDraft("Lettura automatica non disponibile qui: compila i campi guardando la foto."); return; }
+    if (!ST.sample) {
+      box.innerHTML = `<img class="thumb" src="${url}"><p><span class="busy"></span>Leggo lo statino qui sul telefono… (può servire un minuto)</p>`;
+      let d = null; try { d = await stOcrRead(f, t => { const p = box.querySelector("p"); if (p) p.innerHTML = `<span class="busy"></span>${esc(t)}`; }); } catch (er) { console.warn(er); }
+      const ok = d && (d.voli.length || d.inizio);
+      ST.draft = Object.assign(blankDraft(), ok ? d : {}, { id: newId() }); if (!ST.draft.voli.length) ST.draft.voli = [{}];
+      renderDraft(ok ? `Letto dalla foto: ${d.voli.length} ${d.voli.length === 1 ? "volo" : "voli"}${d.inizio ? `, turno ${d.inizio}–${d.fine}` : ""}. Controlla con la foto e correggi prima di salvare.` : "Non sono riuscita a leggere la foto: compila i campi guardando l'immagine, oppure riprova con una foto più dritta e nitida.");
+      return; }
     box.innerHTML = `<img class="thumb" src="${url}"><p><span class="busy"></span>Leggo lo statino…</p>`;
     const r = await ST.sample(PROMPT, { images: [blob], modelTier: "default" });
     const txt = (r && r.text) || ""; const a = txt.indexOf("{"), b = txt.lastIndexOf("}");
@@ -4109,7 +4162,7 @@ document.addEventListener("click", e => { document.querySelectorAll(".sug").forE
 function renderCar() {
   const el = $("car"); if (!el) return;
   el.innerHTML = `<div class="carbig"><label class="btn" style="cursor:pointer;font-size:17px;padding:16px 20px">📥 Carica un documento<input type="file" id="caruno" accept="application/pdf,image/*,.xlsx,.xls,.csv" multiple hidden></label>
-      <div class="muted" style="font-size:13px;margin-top:8px">Griglia dei turni o busta paga, in PDF, foto o Excel: l'app capisce da sola cos'è e lo mette al posto giusto. Se ricarichi un mese già caricato, sostituisce quello vecchio.</div><div id="carmsg" class="muted" style="margin-top:6px"></div></div>
+      <div class="muted" style="font-size:13px;margin-top:8px">Griglia dei turni o busta paga, in PDF, foto o Excel: l'app capisce da sola cos'è e lo mette al posto giusto. Se ricarichi un mese già caricato, sostituisce quello vecchio.</div><div id="carmsg" class="muted" style="margin-top:6px"></div><div class="stbtn" style="justify-content:center;margin-top:6px"><label class="btn ghost" for="stfile" id="carst">📋 Statino del giorno (foto)</label></div></div>
     <details class="carmore" id="carmore"><summary>Altri modi: rotazione a squadre, griglia annuale, orario fisso, a mano</summary><div class="muted" style="font-size:12px;margin-top:8px">Hai un codice preparato dal Lettore Claude? <a href="#" id="carlet">Incollalo qui</a>.</div></details>
     ${FIX.length ? `<div class="carb"><h3>🗂️ Rotazioni e orari salvati (${FIX.length})</h3><div class="muted" style="font-size:13px">${FIX.map(f => esc(f.nome)).join(", ")}</div><div class="stbtn"><button class="btn ghost" id="carfix">Vedi, modifica o elimina</button></div></div>` : ""}`;
   if (!window.__xpObs && $("xpanel")) { window.__xpObs = new MutationObserver(() => document.body.classList.toggle("xp-open", !!$("xpanel").textContent.trim())); window.__xpObs.observe($("xpanel"), { childList: true, subtree: true, characterData: true }); }
@@ -4125,6 +4178,7 @@ function renderCar() {
     if (busta.length) { msg.textContent = "💰 È una busta paga: la leggo e ti porto in Stipendio per controllarla."; const f = busta[0]; try { salLoad(); if (!SAL.cfg.on) { SAL.cfg.on = true; salSave(); } } catch (er) {} showTab("sal"); renderSal(); setTimeout(() => { const d = $("salcfg"); if (d) d.open = true; salImport(f); const m = $("salimp"); if (m) m.scrollIntoView({ behavior: "smooth", block: "start" }); }, 60); }
   };
   $("carlet").onclick = e => { e.preventDefault(); impPanel(); };
+  $("carst").onclick = () => { showTab("st"); };
   if ($("carfix")) $("carfix").onclick = () => { openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
 }
 })();
