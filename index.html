@@ -3005,7 +3005,7 @@ setTimeout(() => { let m = null; try { m = localStorage.getItem("turni.modo"); }
 const SALK = () => { let u = ""; try { u = ST.uid || ""; } catch (e) {} return "inturno.stip." + (u || "locale"); };
 const SAL_DEF = () => ({ cfg: { on: false, mode: "semplice", livello: "", fisso: "", pagaOra: "", soglia: 8, percAll: 0, percStr: "", percStrNott: "", percStrFest: "", percNott: "", percDom: "", percFest: "", percNottDom: "", percNottFest: "", ind1: "", ind1n: "Indennità turno", ind2: "", ind2n: "Altra indennità", voci: [], buonoVal: "", nettoPerc: 72, inps: 9.19, sost: 15, fondoBase: "", fondoPerc: "", detr: "", addiz: "", l207: "", tratt: [], posticipo: false, patrono: "", pin: "" }, mesi: {} });
 let SALLIVE = null, SAL = SAL_DEF(), SALT = false, SALU = false, SALM = null, SALKEY = "";
-function salLoad() { if (SALKEY === SALK()) return; SALKEY = SALK(); SAL = SAL_DEF(); try { const o = JSON.parse(localStorage.getItem(SALK()) || "null"); if (o) { SAL.cfg = Object.assign(SAL.cfg, o.cfg || {}); SAL.mesi = o.mesi || {}; SAL.buste = o.buste || {}; } } catch (e) {} }
+function salLoad() { if (SALKEY === SALK()) return; SALKEY = SALK(); SAL = SAL_DEF(); try { const o = JSON.parse(localStorage.getItem(SALK()) || "null"); if (o) { SAL.cfg = Object.assign(SAL.cfg, o.cfg || {}); SAL.mesi = o.mesi || {}; SAL.buste = o.buste || {}; if (String(SAL.cfg.soglia) === "6" && !SAL.cfg.s8) { SAL.cfg.soglia = 8; SAL.cfg.s8 = 1; } } } catch (e) {} }
 let salTm = null; function salSave() { clearTimeout(salTm); const k = SALKEY || SALK(); salTm = setTimeout(() => { try { localStorage.setItem(k, JSON.stringify(SAL)); } catch (e) {} }, 300); }
 const nz = v => { const x = parseFloat(String(v == null ? "" : v).replace(",", ".")); return isFinite(x) ? x : 0; };
 const eur = v => (Math.round(v * 100) / 100).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -3483,7 +3483,7 @@ function salZuToImport(z) {
   if (z.totali["Detrazioni"]) d.voci.detr = z.totali["Detrazioni"];
   if (sostR) d.voci.sost = 15;
   const bp = body.find(r => /BUONI? PASTO|TICKET/i.test(r.n) && r.unit > 2 && r.unit < 20); if (bp) d.voci.buonoVal = bp.unit;
-  if (pt < 100) { d.voci.parttime = pt; d.voci.fissoEffettivo = 1; d.voci.soglia = Math.round(8 * pt / 100 * 100) / 100; }
+  if (pt < 100) { d.voci.parttime = pt; d.voci.fissoEffettivo = 1; }
   // netto %: (netto + trattenute personali − esenti) / (lordo − coppie − esenti)
   const es = d.competenze.filter(c => c.tass === "esente").reduce((s, c) => s + c.v, 0), pairSum = [...paired].filter(r => r.comp != null).reduce((s, r) => s + r.comp, 0), tT = d.tratt.reduce((s, t) => s + t.v, 0);
   if (z.netto && z.totComp) { const p = (z.netto + tT - es) / (z.totComp - pairSum - es) * 100; if (p > 40 && p < 98) d.voci.nettoPerc = Math.round(p * 10) / 10; }
@@ -3711,7 +3711,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp">📥 Importa dal Lettore</button><span class="muted" style="font-size:11px;align-self:center">versione 36</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp">📥 Importa dal Lettore</button><span class="muted" style="font-size:11px;align-self:center">versione 37</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => impPanel();
     if ($("pout")) $("pout").onclick = () => window.__logout();
