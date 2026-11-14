@@ -7,3 +7,6 @@ window.INTURNO_FIREBASE = {
   messagingSenderId: "869347358161",
   appId: "1:869347358161:web:8e9ef23c693d8986e59cf0"
 };
+
+// Avvisi ad app chiusa: indirizzo del servizio Cloudflare (vuoto = non attivo). La chiave qui sotto è quella pubblica: non è un segreto.
+window.INTURNO_PUSH = { url: "", vapid: "BG0hYmzCkFldXuHVeWzWrqvASk15QlmFpANTNWWYVZP2Vmb19LkdQj-PkTsxREHL7vHfVXkyxxv8EqFftYMnwgM" };
