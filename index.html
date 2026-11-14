@@ -1417,10 +1417,14 @@ function impPanel() {
 }
 function impBusta(d, out) {
   salLoad(); const C = SAL.cfg, it = s => String(s).replace(".", ","); let n = 0;
-  for (const [k, v] of Object.entries(d.voci || {})) { if (v == null || v === "") continue; C[k] = typeof v === "number" ? it(v) : String(v); n++; }
+  const V = Object.assign({}, d.voci || {}); if (+V.parttime > 0 && +V.parttime < 100 && +V.fisso > 0 && !V.fissoEffettivo) V.fisso = Math.round(V.fisso * V.parttime) / 100; delete V.parttime; delete V.fissoEffettivo; delete V.nettoPerc;
+  for (const [k, v] of Object.entries(V)) { if (v == null || v === "") continue; C[k] = typeof v === "number" ? it(v) : String(v); n++; }
   C.voci = C.voci || []; for (const c of d.competenze || []) { if (!c || !c.n) continue; const x = { n: c.n, v: it(c.v), tipo: ["mese", "giorno", "ora"].includes(c.tipo) ? c.tipo : "mese", tass: ["normale", "sost", "esente"].includes(c.tass) ? c.tass : "normale" }; const k = C.voci.findIndex(y => (y.n || "").toUpperCase() === c.n.toUpperCase()); if (k >= 0) C.voci[k] = x; else C.voci.push(x); n++; }
   C.tratt = C.tratt || []; for (const c of d.tratt || []) { if (!c || !c.n) continue; const x = { n: c.n, v: it(c.v), tipo: "fisso" }; const k = C.tratt.findIndex(y => (y.n || "").toUpperCase() === c.n.toUpperCase()); if (k >= 0) C.tratt[k] = x; else C.tratt.push(x); n++; }
-  if (!C.nettoPerc && d.netto && d.lordo && d.netto < d.lordo) C.nettoPerc = it(Math.round(d.netto / d.lordo * 1000) / 10);
+  // netto ≈ % del lordo come lo usa il calcolo: (lordo − esenti) × % + esenti − trattenute personali
+  const tT = (d.tratt || []).reduce((a, t) => a + (+t.v || 0), 0), es = (d.competenze || []).filter(c => c.tass === "esente" && c.tipo === "mese").reduce((a, c) => a + (+c.v || 0), 0);
+  if (d.netto > 0 && d.lordo > es) { const p = (d.netto + tT - es) / (d.lordo - es) * 100; if (p > 40 && p < 95) { C.nettoPerc = it(Math.round(p * 10) / 10); n++; } }
+  else if (d.voci && d.voci.nettoPerc) C.nettoPerc = it(d.voci.nettoPerc);
   C.on = true; salSave();
   out.innerHTML = `<p class="muted">✓ Busta paga importata: ${n} voci. Le trovi in 💰 Stipendio → Dati della busta paga, dove puoi correggerle. I dati restano solo su questo telefono.</p>`;
   try { renderAll(); } catch (e) {}
