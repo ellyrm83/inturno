@@ -1639,6 +1639,22 @@ async function stFotoShow(id) {
 }
 document.addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-stfoto]"); if (b) { ev.preventDefault(); stFotoShow(b.dataset.stfoto); } const x = ev.target.closest && ev.target.closest("#stexp"); if (x) { ev.preventDefault(); stExport(); } });
 
+// ================= PULIZIA: chi non è più autorizzato esce da tutti i gruppi =================
+let PURGE_BUSY = false;
+async function purgeRevoked(db, approvedIds) {
+  if (PURGE_BUSY || !db || !ST.uid) return 0; PURGE_BUSY = true; let n = 0;
+  try {
+    const ok = new Set(approvedIds.concat([ST.uid])), s = await db.collection("gruppi").get();
+    for (const d of s.docs) {
+      const g = d.data() || {}, mem = g.membri || [], inv = g.invitati || [];
+      const out = mem.filter(u => !ok.has(u)), outI = inv.filter(u => !ok.has(u)); if (!out.length && !outI.length) continue;
+      try { await db.doc("gruppi/" + d.id).update({ membri: mem.filter(u => ok.has(u)), invitati: inv.filter(u => ok.has(u)) }); n += out.length; } catch (e) { console.warn("purge g", e); continue; }
+      for (const u of out) { try { await db.doc(`gruppi/${d.id}/dati/${u}`).delete(); } catch (e) {} try { await db.doc("condivisi/" + u).delete(); } catch (e) {} }
+    }
+  } catch (e) { console.warn("purge", e); }
+  PURGE_BUSY = false; return n;
+}
+
 // ================= ORGANIZZA USCITA =================
 const OUT = {
   colazione: { what: "la colazione", label: "☕ Colazione", win: [7.5, 10.5], need: 1.5 },
@@ -3891,7 +3907,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 56</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 57</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
@@ -4081,7 +4097,7 @@ function startAdmin(db, user) {
   };
   const alertBox = t => { const p = document.createElement("p"); p.className = "err"; p.textContent = t; box.appendChild(p); };
   db.collection("richieste").onSnapshot(s => { reqs = s.docs.map(d => ({ id: d.id, d: d.data() })); draw(); }, () => {});
-  db.collection("approvati").onSnapshot(s => { apps = s.docs.map(d => ({ id: d.id, d: d.data() })); draw(); }, () => {});
+  db.collection("approvati").onSnapshot(s => { apps = s.docs.map(d => ({ id: d.id, d: d.data() })); draw(); clearTimeout(window.__purgeT); window.__purgeT = setTimeout(() => purgeRevoked(db, apps.map(a => a.id)), 1500); }, () => {});
 }
 
 // ================= STATINI =================

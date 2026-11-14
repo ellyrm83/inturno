@@ -50,7 +50,7 @@ service cloud.firestore {
     match /condivisi/{uid} {
       allow read: if approved();
       allow create, update: if approved() && me() == uid && request.resource.data.keys().hasOnly(['nome', 'aggiornato']);
-      allow delete: if signed() && me() == uid;
+      allow delete: if signed() && (me() == uid || isOwner());
     }
 
     // gruppi: li vedono solo membri e invitati
@@ -61,7 +61,7 @@ service cloud.firestore {
       function isInvited() { return me() in invitati(); }
       function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
-      allow read: if approved() && (isMember() || isInvited());
+      allow read: if (approved() && (isMember() || isInvited())) || isOwner();
       allow create: if approved() && request.resource.data.creatore == me() && request.resource.data.membri == [me()];
       allow update: if approved() && (
         // i membri modificano nome, inviti ed eventi, ma non la lista dei membri
@@ -76,6 +76,10 @@ service cloud.firestore {
         // rifiutare un invito
         || (isInvited() && changed().hasOnly(['invitati'])
             && request.resource.data.invitati.toSet() == invitati().toSet().difference([me()].toSet()))
+        // la proprietaria toglie dai gruppi chi non è più autorizzato (solo togliere, mai aggiungere)
+        || (isOwner() && changed().hasOnly(['membri', 'invitati'])
+            && request.resource.data.get('membri', []).toSet().difference(membri().toSet()).size() == 0
+            && request.resource.data.get('invitati', []).toSet().difference(invitati().toSet()).size() == 0)
       );
 
       // turni e statini condivisi con QUESTO gruppo: li leggono solo i suoi membri
@@ -83,7 +87,7 @@ service cloud.firestore {
         function memberOfGroup() { return me() in get(/databases/$(database)/documents/gruppi/$(gid)).data.get('membri', []); }
         allow read: if approved() && memberOfGroup();
         allow create, update: if approved() && me() == uid && memberOfGroup();
-        allow delete: if signed() && me() == uid;
+        allow delete: if signed() && (me() == uid || isOwner());
       }
     }
 
