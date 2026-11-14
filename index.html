@@ -882,11 +882,13 @@ function renderCmp() {
   h += `<tr><td class="nm muted" style="font-weight:600">In comune</td>${matchDay.map(k => `<td class="sum">${k === "rest" ? "R" : k === "work" ? "≈" : ""}</td>`).join("")}</tr></table></div>
   <p class="muted">Colonne evidenziate: R = tutti a riposo, ≈ = tutti al lavoro con inizio entro ${tol} h.${missing.length ? " Non presenti in questo mese: " + esc(missing.join(", ")) + "." : ""}</p>`;
   h += `<div class="outbox"><div class="sec">🎉 Organizza uscita</div>
+   <div class="row" style="margin-bottom:6px"><label class="muted" style="margin:0 6px 0 0">Mese</label><select id="outMonth" style="flex:1">${S.months.filter(x => x.year * 12 + x.month >= new Date().getFullYear() * 12 + new Date().getMonth() + 1 || x === m).map(x => `<option value="${x.key}" ${x === m ? "selected" : ""}>${esc(monthLabel(x))}</option>`).join("")}</select></div>
    <div class="row"><select id="outType">${Object.entries(OUT).map(([k, o]) => `<option value="${k}" ${k === S.outType ? "selected" : ""}>${o.label}</option>`).join("")}</select>
    <button class="btn" id="outGo">Organizza uscita</button></div><div id="outRes"></div></div>`;
   out.innerHTML = h;
   S.cmpOk = ok; S.cmpMonth = m;
   $("outType").onchange = () => { S.outType = $("outType").value; if (S.outShown) renderOut(); };
+  if ($("outMonth")) $("outMonth").onchange = () => { S.outShown = true; openMonthKey($("outMonth").value); };
   $("outGo").onclick = () => { S.outType = $("outType").value; S.outShown = true; renderOut(); };
   if (S.outShown) renderOut();
 }
@@ -4047,7 +4049,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 65</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 66</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
