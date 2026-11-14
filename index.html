@@ -320,7 +320,7 @@ h2{font-size:16px;margin:0 0 8px}
       </div>
       <div id="stedit"></div>
       <div class="sec" style="margin-top:18px">🗺️ Dove siamo adesso</div><div id="stmap"></div>
-      <div class="sec" style="margin-top:18px">Diario voli</div>
+      <div class="sec" style="margin-top:18px;display:flex;justify-content:space-between;align-items:center">Diario voli (archivio)<button class="mini" id="stexp">⬇ Esporta (Excel)</button></div>
       <div id="stsync" class="muted"></div>
       <input type="text" id="stq" placeholder="Cerca volo, destinazione, data…" autocomplete="off" style="margin-top:8px">
       <div id="ststats" class="muted" style="margin-top:6px"></div>
@@ -1616,6 +1616,28 @@ function stIcs(e) {
   return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//InTurno//IT", "METHOD:PUBLISH", body, "END:VCALENDAR"].join("\r\n");
 }
 document.addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-stcal]"); if (!b) return; ev.preventDefault(); const e = ST.list.find(x => x.id === b.dataset.stcal); const ics = e && stIcs(e); if (!ics) { b.textContent = "Nessun orario"; return; } calSave({ titolo: "Statino " + e.data, ics }).then(() => { b.textContent = "⏰ Nel calendario ✓"; }).catch(() => {}); });
+
+// ================= ARCHIVIO STATINI: foto originali sul telefono + esportazione =================
+const STDB = { db: null };
+function stDb() { return STDB.db || (STDB.db = new Promise((res, rej) => { try { const r = indexedDB.open("inturno-statini", 1); r.onupgradeneeded = () => r.result.createObjectStore("foto"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } })); }
+async function stFotoSave(id, blob) { try { const db = await stDb(); await new Promise((res, rej) => { const t = db.transaction("foto", "readwrite"); t.objectStore("foto").put(blob, id); t.oncomplete = res; t.onerror = () => rej(t.error); }); return true; } catch (e) { return false; } }
+async function stFotoGet(id) { try { const db = await stDb(); return await new Promise((res, rej) => { const q = db.transaction("foto").objectStore("foto").get(id); q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error); }); } catch (e) { return null; } }
+async function stFotoDel(id) { try { const db = await stDb(); db.transaction("foto", "readwrite").objectStore("foto").delete(id); } catch (e) {} }
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+function stCsv() {
+  const q = x => `"${String(x == null ? "" : x).replace(/"/g, '""')}"`, H = ["Data", "Turno", "Inizio", "Fine", "Pausa", "Volo", "Destinazione", "Partenza (STD)", "Attività", "Terminal", "Banco", "Gate", "Dalle", "Alle", "Note volo", "Note giornata"], R = [H.map(q).join(";")];
+  ST.list.slice().sort((a, b) => (a.data || "").localeCompare(b.data || "")).forEach(e => { const vs = (e.voli || []).length ? e.voli : [{}]; vs.forEach(v => R.push([e.data, e.turno, e.inizio, e.fine, e.pausa, v.volo, v.destinazione, v.partenza, v.attivita, v.terminal || e.terminal, v.postazione, v.gate, v.dalle, v.alle, v.note, e.note].map(q).join(";"))); });
+  return "﻿" + R.join("\r\n");
+}
+function stExport() { const a = document.createElement("a"); a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(stCsv()); a.download = `InTurno-statini-${isoDay(new Date())}.csv`; document.body.appendChild(a); a.click(); a.remove(); }
+async function stFotoShow(id) {
+  const b = await stFotoGet(id), box = $("stedit"); if (!box) return;
+  if (!b) { box.innerHTML = `<p class="muted">La foto di questo statino è salvata solo sul telefono dove l'hai caricata.</p>`; box.scrollIntoView({ behavior: "smooth" }); return; }
+  const u = URL.createObjectURL(b), e = ST.list.find(x => x.id === id);
+  box.innerHTML = `<div class="ovbox"><b>📷 Statino del ${esc(e ? fmtDate(e.data) : "")}</b><img src="${u}" style="width:100%;border-radius:10px;margin-top:8px"><div class="stbtn" style="margin-top:8px"><a class="btn ghost" href="${u}" download="statino-${esc(e ? e.data : id)}.jpg">⬇ Scarica la foto</a><button class="btn ghost" id="stfx">Chiudi</button></div></div>`;
+  $("stfx").onclick = () => { box.innerHTML = ""; URL.revokeObjectURL(u); }; box.scrollIntoView({ behavior: "smooth" });
+}
+document.addEventListener("click", ev => { const b = ev.target.closest && ev.target.closest("[data-stfoto]"); if (b) { ev.preventDefault(); stFotoShow(b.dataset.stfoto); } const x = ev.target.closest && ev.target.closest("#stexp"); if (x) { ev.preventDefault(); stExport(); } });
 
 // ================= ORGANIZZA USCITA =================
 const OUT = {
@@ -3874,7 +3896,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 52</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 53</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
@@ -4160,7 +4182,7 @@ $("stfile").addEventListener("change", async e => {
   const box = $("stedit");
   try {
     const { blob, url } = await shrink(f);
-    ST.img = url;
+    ST.img = url; ST.imgBlob = blob;
     if (!ST.sample) {
       box.innerHTML = `<img class="thumb" src="${url}"><p><span class="busy"></span>Leggo lo statino qui sul telefono… (può servire un minuto)</p>`;
       let d = null; try { d = await stOcrRead(f, t => { const p = box.querySelector("p"); if (p) p.innerHTML = `<span class="busy"></span>${esc(t)}`; }); } catch (er) { console.warn(er); }
@@ -4184,7 +4206,7 @@ $("stfile").addEventListener("change", async e => {
     ST.draft = ST.draft || blankDraft(); renderDraft(msg);
   }
 });
-$("stman").onclick = () => { ST.img = null; ST.draft = blankDraft(); renderDraft(""); };
+$("stman").onclick = () => { ST.img = null; ST.imgBlob = null; ST.draft = blankDraft(); renderDraft(""); };
 
 function blankDraft() { const t = new Date(); return { id: newId(), data: `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`, turno: "", inizio: "", fine: "", voli: [{}], note: "" }; }
 const v = x => x == null ? "" : esc(x);
@@ -4221,17 +4243,20 @@ function renderDraft(msg) {
 async function saveDraft() {
   const d = ST.draft; if (!d) return;
   d.voli = d.voli.filter(f => Object.values(f).some(x => x && String(x).trim()));
+  if (ST.imgBlob) d.foto = true;
   const clean = JSON.parse(JSON.stringify(d)); clean.salvato = new Date().toISOString();
   const i = ST.list.findIndex(e => e.id === clean.id);
   if (i >= 0) ST.list[i] = clean; else ST.list.push(clean);
   lsSave();
   let warn = "";
   if (ST.col) { try { await ST.col.doc(clean.id).set(clean); } catch (e) { warn = " (salvato solo su questo dispositivo)"; } }
+  let fw = ""; if (ST.imgBlob) { fw = (await stFotoSave(clean.id, ST.imgBlob)) ? " con la foto" : " (la foto non è stata salvata)"; ST.imgBlob = null; }
   ST.draft = null; ST.img = null;
-  $("stedit").innerHTML = `<p class="muted">✓ Statino del ${esc(fmtDate(clean.data))} salvato${warn}.</p>`;
+  $("stedit").innerHTML = `<p class="muted">✓ Statino del ${esc(fmtDate(clean.data))} salvato${fw}${warn}. Resta nel Diario voli.</p>`;
   renderStList(); if (S.months.length) renderMe(); publishSoon();
 }
 async function delEntry(id) {
+  stFotoDel(id);
   ST.list = ST.list.filter(e => e.id !== id); lsSave();
   if (ST.col) { try { await ST.col.doc(id).delete(); } catch {} }
   renderStList(); if (S.months.length) renderMe();
@@ -4249,7 +4274,7 @@ function renderStList() { try { stMapRender(); } catch (e) {}
   $("ststats").innerHTML = ST.list.length ? `${ST.list.length} giornate · ${nVoli} voli${top ? " · più frequenti: " + top : ""}` : "";
   if (!shown.length) { $("stlist").innerHTML = `<p class="muted">${ST.list.length ? "Nessun risultato." : "Nessuno statino salvato."}</p>`; return; }
   $("stlist").innerHTML = shown.map(e => `<div class="entry"><h3><span>${esc(fmtDate(e.data))}${e.turno ? ` · <span class="pill">${esc(e.turno)}</span>` : ""}</span>
-     <span><button class="mini" data-stcal="${esc(e.id)}">⏰ Promemoria</button> <button class="mini" data-ed="${esc(e.id)}">Modifica</button> <button class="mini" data-del="${esc(e.id)}">Elimina</button></span></h3>
+     <span>${e.foto ? `<button class="mini" data-stfoto="${esc(e.id)}">📷 Foto</button> ` : ""}<button class="mini" data-stcal="${esc(e.id)}">⏰ Promemoria</button> <button class="mini" data-ed="${esc(e.id)}">Modifica</button> <button class="mini" data-del="${esc(e.id)}">Elimina</button></span></h3>
      ${e.inizio || e.fine ? `<div class="muted">${esc(e.inizio || "?")}–${esc(e.fine || "?")}${e.pausa ? ` · ☕ ${e.pausa === "CTC" ? "pausa: contattare il responsabile" : "pausa alle " + esc(e.pausa)}` : ""}</div>` : ""}
      ${(e.voli || []).map(f => `<div class="fli"><span class="t">${esc(f.dalle || "")}${f.alle ? "–" + esc(f.alle) : ""}</span><span><b>${esc(f.volo || f.attivita || "Attività")}</b>${f.destinazione ? " " + esc(f.destinazione) : ""}${f.partenza ? " · part. " + esc(f.partenza) : ""}${f.volo && f.attivita ? " · " + esc(f.attivita) : ""}${f.postazione ? " · " + esc(f.postazione) : ""}${f.gate ? " · <b>Gate " + esc(f.gate) + "</b>" : ""}${f.terminal ? " · " + esc(f.terminal) : ""}${f.note ? `<br><span class="muted">${esc(f.note)}</span>` : ""}</span></div>`).join("")}
      ${e.note ? `<div class="muted" style="margin-top:4px">${esc(e.note)}</div>` : ""}</div>`).join("");
