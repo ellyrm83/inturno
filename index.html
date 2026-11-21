@@ -233,6 +233,7 @@ h2{font-size:16px;margin:0 0 8px}
   <div class="card" id="prof"></div>
 
   <section id="t-car" class="card hidden"><div id="car"></div></section>
+  <section id="t-stats" class="card hidden"><h3>📊 Statistiche</h3><div id="statpage"></div></section>
   <div class="card" id="upcard">
     <h2>📥 La mia griglia dei turni</h2>
     <div class="drop" id="drop">
@@ -267,6 +268,7 @@ h2{font-size:16px;margin:0 0 8px}
       <div class="tab" data-t="usc" data-grp="main">🎉 Uscite</div>
       <div class="tab" data-t="cc" data-grp="main">👥 Gruppi</div>
       <div class="tab" data-t="car" data-grp="main">📥 Carica</div>
+      <div class="tab" data-t="stats" data-grp="main">📊 Stat.</div>
     </div>
     <div class="subtabs">
       <div class="tab sub on" data-t="ag" data-grp="uscite">📅 Agenda</div>
@@ -950,13 +952,14 @@ function setMode(m, keepTab) {
 document.querySelectorAll(".modesw [data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
 function showTab(t) {
   try { if (lkNeeded(t)) { lkAsk(t); return; } } catch (e) {}
+  if (t === "stats") setTimeout(renderStat, 0);
   if (t === "usc") { let k = "ag"; try { k = localStorage.getItem("turni.sub") || "ag"; } catch (e) {} if (!["ag", "cmp", "sim", "imp"].includes(k)) k = "ag"; setMode("uscite", true); const tb = document.querySelector(`.subtabs .tab[data-t="${k}"]`) || document.querySelector('.subtabs .tab[data-t="ag"]'); if (tb) { tb.click(); return; } t = "ag"; }
   if (["ag", "cmp", "sim", "cc", "imp"].includes(t)) { try { localStorage.setItem("turni.sub", t); } catch (e) {} }
   document.querySelectorAll(".tabs>.tab").forEach(x => { if (x.querySelector(".ti")) return; const m = x.textContent.trim().match(/^(\S+)\s+(.+)$/); if (m) x.innerHTML = `<span class="ti">${m[1]}</span>${esc(m[2])}`; });
   if (document.body.dataset.tab !== t) setTimeout(() => window.scrollTo({ top: 0 }), 0);
   document.body.dataset.tab = t; { const tb = document.querySelector(`.tab[data-t="${t}"]`); if (tb && tb.dataset.grp && !document.body.classList.contains("m-" + tb.dataset.grp)) setMode(tb.dataset.grp, true); }
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t)); { const u = document.querySelector('.tab[data-t="usc"]'); if (u) u.classList.toggle("on", ["ag", "cmp", "sim", "imp"].includes(t)); }
-  ["ag", "me", "cmp", "sim", "st", "cc", "imp", "sal", "car"].forEach(k => { const el = $("t-" + k); if (el) el.classList.toggle("hidden", k !== t); });
+  ["ag", "me", "cmp", "sim", "st", "cc", "imp", "sal", "car", "stats"].forEach(k => { const el = $("t-" + k); if (el) el.classList.toggle("hidden", k !== t); });
 }
 document.querySelectorAll(".tab").forEach(x => x.onclick = () => { showTab(x.dataset.t); if (x.dataset.t === "sim") renderSim(); if (x.dataset.t === "cc") renderCC(); if (x.dataset.t === "ag") renderAg(); if (x.dataset.t === "imp") renderImp(); if (x.dataset.t === "sal") renderSal(); if (x.dataset.t === "car") renderCar(); if (x.dataset.t === "st") { try { stMapRender(); } catch (e) {} } });
 
@@ -1772,7 +1775,7 @@ const lkB64 = u8 => btoa(String.fromCharCode(...new Uint8Array(u8))).replace(/\+
 const lkUnB64 = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
 async function lkHash(pin) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("inturno-pin:" + (LK.salt || "") + ":" + pin)); return lkB64(b); }
 function lkOn() { return !!LK.hash; }
-function lkNeeded(t) { try { return lkOn() && !LKopen && (t === "sal" || t === "st"); } catch (e) { return false; } }
+function lkNeeded(t) { try { return lkOn() && !LKopen && (t === "sal" || t === "st" || t === "stats"); } catch (e) { return false; } }
 async function lkBioOk() { try { return !!(window.PublicKeyCredential && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch { return false; } }
 async function lkBioReg() {
   const cred = await navigator.credentials.create({ publicKey: { challenge: crypto.getRandomValues(new Uint8Array(32)), rp: { name: "InTurno", id: location.hostname }, user: { id: crypto.getRandomValues(new Uint8Array(16)), name: "InTurno", displayName: "InTurno" },
@@ -1804,7 +1807,7 @@ function lkAsk(t) {
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { LKhid = Date.now(); return; }
-  if (LKhid && Date.now() - LKhid > 60000 && lkOn()) { LKopen = false; const t = document.body.dataset.tab; if (t === "sal" || t === "st") lkAsk(t); try { salTabLabel(); } catch {} }
+  if (LKhid && Date.now() - LKhid > 60000 && lkOn()) { LKopen = false; const t = document.body.dataset.tab; if (t === "sal" || t === "st" || t === "stats") lkAsk(t); try { salTabLabel(); } catch {} }
 });
 function lkPanelHtml() {
   return `<div class="setsec" id="lksec"><b>🔒 Blocco di Stipendio e Statini</b>
@@ -2066,6 +2069,89 @@ function stZoneGroup(L, who) {
   const g = new Map(); L.forEach(x => { const z = stZone(x); if (!g.has(z)) g.set(z, []); g.get(z).push(x); });
   if (g.size === 1 && g.has("")) return L.map(who).join("");
   return [...g.entries()].sort((a, b) => (a[0] || "~").localeCompare(b[0] || "~")).map(([z, xs]) => `<div class="mpz">${z ? "📍 " + esc(z) : "Altre postazioni"}</div>${xs.map(who).join("")}`).join("");
+}
+
+// ================= PAGINA STATISTICHE (📊 in basso) =================
+// Stipendio, turni, notturni, e per ogni mese: pause, contatti RIT, statini assegnati a fine turno.
+const stR1 = x => bcH(Math.round((x || 0) * 10) / 10);
+const stSum = (rows, k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
+function stYears() {
+  const ys = new Set();
+  S.months.forEach(m => { const n = m.month && !m.predicted && findIn(m, P.name); if (n && codesOf(m, n).some(c => c && (c.kind === "lavoro" || c.kind === "ferie" || c.kind === "assenza") && !c.pred)) ys.add(m.year); });
+  ST.list.forEach(e => { if (e.data && /^\d{4}/.test(e.data)) ys.add(+e.data.slice(0, 4)); });
+  try { salLoad(); Object.keys(SAL.buste || {}).forEach(k => { if (/^\d{4}-\d{2}$/.test(k)) ys.add(+k.slice(0, 4)); }); } catch (e) {}
+  return [...ys].filter(Boolean).sort();
+}
+function stTurniRows(Y) {
+  return S.months.filter(m => m.year === Y && m.month && !m.predicted && findIn(m, P.name)).sort((a, b) => a.month - b.month).map(m => {
+    const n = findIn(m, P.name), R = salMese(m, {}); if (!R) return null; const cs = codesOf(m, n) || [];
+    const gg = cs.filter(c => c && c.kind === "lavoro" && !c.pred).length;
+    if (!gg && !cs.some(c => c && (c.kind === "ferie" || c.kind === "assenza"))) return null;
+    return { m, gg, ore: R.ore || 0, nott: R.nott || 0, fest: R.rows.filter(r => r.fest > 0).length, dom: R.rows.filter(r => r.dom > 0).length,
+      all: R.ordH || 0, str: R.strH || 0, mal: cs.filter(c => c && /^MAL/.test(String(c.label))).length,
+      fer: cs.filter(c => c && c.kind === "ferie").length, perm: cs.filter(c => c && /^PERM/.test(String(c.label))).length,
+      l104: cs.filter(c => c && /^104/.test(String(c.label))).length };
+  }).filter(Boolean);
+}
+function stStipHtml(Y) {
+  salLoad();
+  const bs = Object.keys(SAL.buste || {}).filter(k => /^\d{4}-\d{2}$/.test(k) && +k.slice(0, 4) === Y).sort().map(k => ({ k, b: SAL.buste[k] }));
+  if (!bs.length) return `<h4>💰 Stipendio ${Y}</h4><p class="muted" style="font-size:13px">Importa le buste paga (Stipendio → Carica busta) per vedere qui netto, lordo e andamento.</p>`;
+  const nets = bs.map(x => Number(x.b.netto) || 0), lords = bs.map(x => Number(x.b.lordo) || 0);
+  const tot = nets.reduce((a, b) => a + b, 0), avg = tot / nets.length, mx = Math.max(...nets), mn = Math.min(...nets), top = mx || 1;
+  const mn3 = k => MESI[+k.slice(5) - 1].slice(0, 3);
+  return `<h4>💰 Stipendio ${Y}</h4>
+    <div class="stats"><div class="stat"><b>${eur(tot)} €</b><span>netto incassato</span></div><div class="stat"><b>${eur(avg)} €</b><span>netto medio</span></div><div class="stat"><b>${eur(mx)} €</b><span>netto massimo</span></div><div class="stat"><b>${eur(mn)} €</b><span>netto minimo</span></div></div>
+    <div class="stchart">${bs.map((x, i) => `<div class="stcol" title="${eur(nets[i])} €"><div class="stbar" style="height:${Math.round(nets[i] / top * 100)}%"></div><span>${mn3(x.k)}</span></div>`).join("")}</div>
+    <div class="scroll"><table class="saltab sttab"><tr><td></td><td>lordo</td><td>netto</td></tr>${bs.map((x, i) => `<tr><td>${mn3(x.k)}</td><td>${eur(lords[i])}</td><td>${eur(nets[i])}</td></tr>`).join("")}<tr class="tot"><td>Tot.</td><td>${eur(stSum(lords.map(v => ({ v })), "v"))}</td><td>${eur(tot)}</td></tr></table></div>`;
+}
+function stTurniHtml(Y) {
+  const rows = stTurniRows(Y); if (!rows.length) return `<h4>🕘 Turni ${Y}</h4><p class="muted" style="font-size:13px">Nessun turno caricato per ${Y}.</p>`;
+  const T = {}; ["gg", "ore", "nott", "fest", "dom", "all", "str", "mal", "fer", "perm", "l104"].forEach(k => T[k] = stSum(rows, k));
+  const best = rows.reduce((a, b) => (b.ore > a.ore ? b : a), rows[0]);
+  return `<h4>🕘 Turni ${Y}</h4>
+    <div class="stats"><div class="stat"><b>${T.gg}</b><span>giorni lavorati</span></div><div class="stat"><b>${stR1(T.ore)}</b><span>ore lavorate</span></div><div class="stat"><b>${stR1(T.gg ? T.ore / T.gg : 0)}</b><span>ore medie al turno</span></div><div class="stat"><b>${T.fer}</b><span>giorni di ferie</span></div></div>
+    <p class="muted" style="font-size:13px">Mese più carico: <b>${MESI[best.m.month - 1]}</b> (${stR1(best.ore)} h). Malattia ${T.mal} gg · permessi ${T.perm} gg · L.104 ${T.l104} gg.</p>
+    <div class="scroll"><table class="saltab sttab"><tr><td></td><td>gg</td><td>ore</td><td>🌙</td><td>fest.</td><td>dom.</td><td>all.</td><td>str.</td><td>mal.</td></tr>
+      ${rows.map(r => `<tr><td>${MESI[r.m.month - 1].slice(0, 3)}</td><td>${r.gg}</td><td>${stR1(r.ore)}</td><td>${stR1(r.nott)}</td><td>${r.fest}</td><td>${r.dom}</td><td>${stR1(r.all)}</td><td>${stR1(r.str)}</td><td>${r.mal}</td></tr>`).join("")}
+      <tr class="tot"><td>Tot.</td><td>${T.gg}</td><td>${stR1(T.ore)}</td><td>${stR1(T.nott)}</td><td>${T.fest}</td><td>${T.dom}</td><td>${stR1(T.all)}</td><td>${stR1(T.str)}</td><td>${T.mal}</td></tr></table></div>`;
+}
+function stNotteHtml(Y) {
+  const rows = stTurniRows(Y); if (!rows.length) return "";
+  const tn = stSum(rows, "nott"), to = stSum(rows, "ore"), top = Math.max(...rows.map(r => r.nott)) || 1;
+  return `<h4>🌙 Notturni ${Y}</h4>
+    <p class="muted" style="font-size:13px"><b>${stR1(tn)} h</b> di notturno su ${stR1(to)} h lavorate (${stR1(to ? tn / to * 100 : 0)}%). In media ${stR1(tn / rows.length)} h al mese.</p>
+    <div class="stchart">${rows.map(r => `<div class="stcol" title="${stR1(r.nott)} h"><div class="stbar" style="height:${Math.round(r.nott / top * 100)}%"></div><span>${MESI[r.m.month - 1].slice(0, 3)}</span></div>`).join("")}</div>`;
+}
+function stPauseHtml(Y) {
+  const M = {};
+  ST.list.forEach(e => {
+    if (!e.data || +e.data.slice(0, 4) !== Y) return;
+    const k = e.data.slice(0, 7), o = M[k] || (M[k] = { n: 0, t: 0, ctc: 0, senza: 0, rit: 0, fine: 0 });
+    o.n++;
+    if (/^\d{2}:\d{2}$/.test(e.pausa || "")) o.t++; else if (e.pausa === "CTC") o.ctc++; else o.senza++;
+    if (e.rit || e.pausa === "CTC") o.rit++;
+    if (e.fineT) o.fine++;
+  });
+  const keys = Object.keys(M).sort(); if (!keys.length) return `<h4>☕ Pause e statini ${Y}</h4><p class="muted" style="font-size:13px">Nessuno statino salvato per ${Y}.</p>`;
+  const T = { n: 0, t: 0, ctc: 0, senza: 0, rit: 0, fine: 0 }; keys.forEach(k => Object.keys(T).forEach(f => { T[f] += M[k][f]; }));
+  const row = (lab, o, cls = "") => `<tr class="${cls}"><td>${lab}</td><td>${o.n}</td><td>${o.t}</td><td>${o.ctc}</td><td>${o.rit}</td><td>${o.fine}</td><td>${o.senza}</td></tr>`;
+  return `<h4>☕ Pause e statini ${Y}</h4>
+    <div class="stats"><div class="stat"><b>${T.rit}</b><span>volte contattato il RIT</span></div><div class="stat"><b>${T.fine}</b><span>assegnati a fine turno</span></div><div class="stat"><b>${T.t}</b><span>pause con orario</span></div><div class="stat"><b>${T.n}</b><span>statini salvati</span></div></div>
+    <p class="muted" style="font-size:12px">Pause con CTC (contatta il responsabile): ${T.ctc}. Statini senza pausa annotata: ${T.senza}.</p>
+    <div class="scroll"><table class="saltab sttab"><tr><td></td><td>statini</td><td>pausa</td><td>CTC</td><td>RIT</td><td>fine t.</td><td>senza</td></tr>
+      ${keys.map(k => row(MESI[+k.slice(5) - 1].slice(0, 3), M[k])).join("")}${row("Tot.", T, "tot")}</table></div>`;
+}
+function renderStat() {
+  const el = $("statpage"); if (!el) return;
+  try {
+    if (!P.name) { el.innerHTML = `<p class="muted">Scegli il tuo profilo per vedere le statistiche.</p>`; return; }
+    const ys = stYears(); if (!ys.length) { el.innerHTML = `<p class="muted">Carica turni, buste o statini per vedere le statistiche.</p>`; return; }
+    const cur = new Date().getFullYear(), Y = S.stY && ys.includes(S.stY) ? S.stY : ys.includes(cur) ? cur : ys[ys.length - 1];
+    el.innerHTML = `<div class="ovtypes" style="margin:0 0 10px">${ys.map(y => `<span class="chip ${y === Y ? "sel" : ""}" data-sty="${y}">${y}</span>`).join("")}</div>`
+      + stStipHtml(Y) + stTurniHtml(Y) + stNotteHtml(Y) + stPauseHtml(Y);
+    el.querySelectorAll("[data-sty]").forEach(c => { c.onclick = () => { S.stY = +c.dataset.sty; renderStat(); }; });
+  } catch (e) { console.warn(e); el.innerHTML = `<p class="muted">Non riesco a calcolare le statistiche: ${esc(e && e.message || e)}</p>`; }
 }
 
 // ================= ORGANIZZA USCITA =================
@@ -4359,7 +4445,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 67</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 68</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
@@ -4682,7 +4768,7 @@ function renderDraft(msg) {
    <div><label>Turno</label><input data-k="turno" value="${v(d.turno)}" placeholder="es. F23"></div>
    <div><label>Inizio</label><input type="time" data-k="inizio" value="${v(d.inizio)}"></div>
    <div><label>Fine</label><input type="time" data-k="fine" value="${v(d.fine)}"></div>
-   <div class="full"><label>☕ Pausa (scritta a penna in fondo)</label><div class="chips" style="margin:0"><input type="time" data-k="pausa" value="${v(/^\d{2}:\d{2}$/.test(d.pausa || "") ? d.pausa : "")}" style="width:120px;display:inline-block"><span class="chip ${d.pausa === "CTC" ? "sel" : ""}" data-ctc="1">CTC · contattare il responsabile</span></div></div>
+   <div class="full"><label>☕ Pausa (scritta a penna in fondo)</label><div class="chips" style="margin:0"><input type="time" data-k="pausa" value="${v(/^\d{2}:\d{2}$/.test(d.pausa || "") ? d.pausa : "")}" style="width:120px;display:inline-block"><span class="chip ${d.pausa === "CTC" ? "sel" : ""}" data-ctc="1">CTC · contattare il responsabile</span></div><div class="chips" style="margin:6px 0 0"><span class="chip ${d.rit ? "sel" : ""}" data-rit="1">📞 Ho contattato il RIT</span><span class="chip ${d.fineT ? "sel" : ""}" data-fine="1">🏁 Assegnato a fine turno</span></div></div>
    <div class="full"><label>Terminal</label><div class="chips">${["T1", "T3"].map(t => `<span class="chip ${d.terminal === t ? "sel" : ""}" data-term="${t}">🛫 ${t}</span>`).join("")}<input data-k="terminal" value="${v(d.terminal)}" placeholder="altro" style="width:90px;display:inline-block"></div></div></div>
    <div class="sec">Voli e attività</div><div id="fls">`;
   d.voli.forEach((f, i) => {
@@ -4695,11 +4781,13 @@ function renderDraft(msg) {
   $("stedit").innerHTML = h;
   $("stedit").querySelectorAll("[data-k]").forEach(el => el.oninput = () => { d[el.dataset.k] = el.value; });
   $("stedit").querySelectorAll(".fl").forEach(fl => fl.querySelectorAll("[data-f]").forEach(el => el.oninput = () => { d.voli[+fl.dataset.i][el.dataset.f] = el.value; }));
-  $("stedit").querySelectorAll("[data-ctc]").forEach(c => c.onclick = () => { d.pausa = d.pausa === "CTC" ? "" : "CTC"; renderDraft(msg); });
+  $("stedit").querySelectorAll("[data-ctc]").forEach(c => c.onclick = () => { d.pausa = d.pausa === "CTC" ? "" : "CTC"; if (d.pausa === "CTC") d.rit = true; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-fterm]").forEach(c => c.onclick = () => { const [i, t] = c.dataset.fterm.split("|"); d.voli[+i].terminal = d.voli[+i].terminal === t ? "" : t; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-term]").forEach(c => c.onclick = () => { d.terminal = c.dataset.term; d.voli.forEach(f => { f.terminal = c.dataset.term; }); renderDraft(msg); });
   $("stedit").querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { d.voli.splice(+b.dataset.rm, 1); if (!d.voli.length) d.voli.push({}); renderDraft(msg); });
   $("addfl").onclick = () => { d.voli.push({}); renderDraft(msg); };
+  $("stedit").querySelectorAll("[data-rit]").forEach(c => c.onclick = () => { d.rit = !d.rit; renderDraft(msg); });
+  $("stedit").querySelectorAll("[data-fine]").forEach(c => c.onclick = () => { d.fineT = !d.fineT; renderDraft(msg); });
   $("stcancel").onclick = () => { ST.draft = null; ST.img = null; $("stedit").innerHTML = ""; };
   $("stsave").onclick = saveDraft;
 }
