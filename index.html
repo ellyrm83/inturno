@@ -1567,7 +1567,7 @@ function stParseProg(rows) {
     if (g) v.gate = g; if (mx) v.note = "max " + mx;
     d.voli.push(v);
   }
-  // pausa scritta a penna in fondo: un orario oppure CTC (contattare il responsabile)
+  // pausa scritta a penna in fondo: un orario oppure CTC (contatta RIT)
   { let lastF = -1; L.forEach((t, i) => { if (RE.test(t) || (RE2.test(t) && /\/\s*\d{3,4}/.test(t))) lastF = i; });
     const tail = L.slice(lastF + 1);
     if (tail.some(t => /\bC\s?T\s?C\b/.test(t))) d.pausa = "CTC";
@@ -2008,7 +2008,7 @@ function stNextAct(st, hm) {
 }
 function actLine(v, st) { if (!v) return ""; const T = v.terminal || (st && st.terminal) || "";
   return `${esc(v.dalle || v.partenza)}${v.alle ? "–" + esc(v.alle) : ""} · <b>${esc([v.attivita, v.volo].filter(Boolean).join(" ") || "attività")}</b>${v.destinazione ? " → " + esc(v.destinazione) : ""}${T ? " · " + esc(T) : ""}${v.gate ? " · gate <b>" + esc(v.gate) + "</b>" : ""}${v.postazione ? " · " + esc(v.postazione) : ""}`; }
-function pausaLine(st) { if (!st || !st.pausa) return ""; return /^ctc$/i.test(String(st.pausa).trim()) ? `☕ Pausa: <b>CTC</b> (chiedi al RIT) · <a href="tel:${RIT_TEL()}">📞 RIT ${RIT_TEL()}</a>` : `☕ Pausa alle <b>${esc(st.pausa)}</b>`; }
+function pausaLine(st) { if (!st || !st.pausa) return ""; return /^ctc$/i.test(String(st.pausa).trim()) ? "☕ Pausa: <b>CTC</b> (contatta RIT)" : `☕ Pausa alle <b>${esc(st.pausa)}</b>`; }
 function oggiHtml() {
   if (!P.name || !S.months.length) return "";
   const now = new Date(), t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()), t1 = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + 1);
@@ -2153,10 +2153,22 @@ function renderStat() {
     el.querySelectorAll("[data-sty]").forEach(c => { c.onclick = () => { S.stY = +c.dataset.sty; renderStat(); }; });
   } catch (e) { console.warn(e); el.innerHTML = `<p class="muted">Non riesco a calcolare le statistiche: ${esc(e && e.message || e)}</p>`; }
 }
-// numero del RIT (interno): chiamabile dal tasto nello statino e nella scheda Oggi
-function RIT_TEL() { try { return (SET && SET.ritTel) || "8510"; } catch (e) { return "8510"; } }
+// contatti responsabili: scheda in cima alle Impostazioni (ognuno inserisce i suoi, sul proprio telefono)
+function contHtml() {
+  const L = SET.contatti || [];
+  return `<div class="setsec" id="contsec"><b>📇 Contatti responsabili</b>
+    <p class="muted" style="font-size:12px">Solo sul tuo telefono. Nello statino, con la pausa CTC, leggi "contatta RIT": il numero lo cerchi qui.</p>
+    ${L.map((c, i) => `<div class="row" style="justify-content:space-between;gap:6px;margin:4px 0"><span>${esc(c.nome)} · <b>${esc(c.tel)}</b></span><button class="mini" data-cdel="${i}">Togli</button></div>`).join("") || `<p class="muted" style="font-size:12px">Nessun contatto ancora.</p>`}
+    <div class="fgrid"><div><label>Nome (es. RIT area passeggeri)</label><input id="cnome"></div><div><label>Numero</label><input id="ctel" inputmode="tel"></div></div>
+    <div class="stbtn"><button class="btn ghost" id="cadd">Aggiungi responsabile</button></div></div>`;
+}
+function contBind(root) {
+  const q = s => root.querySelector(s); if (!q("#cadd")) return;
+  const again = () => { q("#contsec").outerHTML = contHtml(); contBind(root); };
+  q("#cadd").onclick = () => { const n = q("#cnome").value.trim(), t = q("#ctel").value.trim(); if (!n || !t) return; SET.contatti = (SET.contatti || []).concat([{ nome: n, tel: t }]); saveSet(); again(); };
+  root.querySelectorAll("[data-cdel]").forEach(b => { b.onclick = () => { SET.contatti.splice(+b.dataset.cdel, 1); saveSet(); again(); }; });
+}
 
-// RIT_TEL è definita in stat.js (già inserito sopra)
 // ================= ORGANIZZA USCITA =================
 const OUT = {
   colazione: { what: "la colazione", label: "☕ Colazione", win: [7.5, 10.5], need: 1.5 },
@@ -2413,9 +2425,9 @@ function openSettings() {
     <div class="setsec"><b>🏖️ Rotazione ferie</b><div class="row"><span class="muted">Il periodo cambia ogni</span><input id="sfo" inputmode="numeric" value="${esc(String(SET.ferieOgni || 1))}" style="width:60px"><span class="muted">anni</span></div>
       <p class="muted" style="font-size:12px">I periodi si impostano in Turni → 🏖️ Ferie e rotazione ferie.</p></div>
     ${setExtraHtml(SX)}
-    ${lkPanelHtml()}${bkHtml()}
+    ${contHtml()}${lkPanelHtml()}${bkHtml()}
     <div class="stbtn" style="margin-top:10px"><button class="btn" id="setok">Salva impostazioni</button><button class="btn ghost" id="setx">Chiudi</button></div></div>`;
-    lkPanelBind(box); bkBind(box);
+    lkPanelBind(box); bkBind(box); contBind(box);
     const col = () => { SET.notturno = $("snot").checked; SET.nDa = $("snda").value || "20:00"; SET.nA = $("sna").value || "08:00"; SET.buoni = $("sbuo").checked; SET.buonoOre = parseFloat(String($("sbore").value).replace(",", ".")) || 6; SET.buonoEuro = $("sbeur").value.trim(); SET.statini = $("sstat").checked; SET.ferieOgni = Math.max(1, parseInt($("sfo").value) || 1);
       if ($("snw")) { const n = Math.min(30, Math.max(1, parseInt($("snw").value) || 1)); while (R.sett.length < n) R.sett.push({ r1: null, r2: null }); R.sett.length = n; }
       if ($("snd")) { const n = Math.min(60, Math.max(2, parseInt($("snd").value) || 7)); while (R.giorni.length < n) R.giorni.push("L"); R.giorni.length = n; } };
@@ -4771,7 +4783,7 @@ function renderDraft(msg) {
    <div><label>Turno</label><input data-k="turno" value="${v(d.turno)}" placeholder="es. F23"></div>
    <div><label>Inizio</label><input type="time" data-k="inizio" value="${v(d.inizio)}"></div>
    <div><label>Fine</label><input type="time" data-k="fine" value="${v(d.fine)}"></div>
-   <div class="full"><label>☕ Pausa (scritta a penna in fondo)</label><div class="chips" style="margin:0"><input type="time" data-k="pausa" value="${v(/^\d{2}:\d{2}$/.test(d.pausa || "") ? d.pausa : "")}" style="width:120px;display:inline-block"><span class="chip ${d.pausa === "CTC" ? "sel" : ""}" data-ctc="1">CTC · contattare il responsabile</span>${d.pausa === "CTC" ? `<a class="chip sel" href="tel:${RIT_TEL()}">📞 Chiama RIT ${RIT_TEL()}</a>` : ""}</div><div class="chips" style="margin:6px 0 0"><span class="chip ${d.rit ? "sel" : ""}" data-rit="1">📞 Ho contattato il RIT</span><span class="chip ${d.fineT ? "sel" : ""}" data-fine="1">🏁 Assegnato a fine turno</span></div></div>
+   <div class="full"><label>☕ Pausa (scritta a penna in fondo)</label><div class="chips" style="margin:0"><input type="time" data-k="pausa" value="${v(/^\d{2}:\d{2}$/.test(d.pausa || "") ? d.pausa : "")}" style="width:120px;display:inline-block"><span class="chip ${d.pausa === "CTC" ? "sel" : ""}" data-ctc="1">CTC · contatta RIT</span></div><div class="chips" style="margin:6px 0 0"><span class="chip ${d.rit ? "sel" : ""}" data-rit="1">📞 Ho contattato il RIT</span><span class="chip ${d.fineT ? "sel" : ""}" data-fine="1">🏁 Assegnato a fine turno</span></div></div>
    <div class="full"><label>Terminal</label><div class="chips">${["T1", "T3"].map(t => `<span class="chip ${d.terminal === t ? "sel" : ""}" data-term="${t}">🛫 ${t}</span>`).join("")}<input data-k="terminal" value="${v(d.terminal)}" placeholder="altro" style="width:90px;display:inline-block"></div></div></div>
    <div class="sec">Voli e attività</div><div id="fls">`;
   d.voli.forEach((f, i) => {
@@ -4831,7 +4843,7 @@ function renderStList() { try { stMapRender(); } catch (e) {}
   if (!shown.length) { $("stlist").innerHTML = `<p class="muted">${ST.list.length ? "Nessun risultato." : "Nessuno statino salvato."}</p>`; return; }
   $("stlist").innerHTML = shown.map(e => `<div class="entry"><h3><span>${esc(fmtDate(e.data))}${e.turno ? ` · <span class="pill">${esc(e.turno)}</span>` : ""}</span>
      <span>${e.foto ? `<button class="mini" data-stfoto="${esc(e.id)}">📷 Foto</button> ` : ""}<button class="mini" data-stcal="${esc(e.id)}">⏰ Promemoria</button> <button class="mini" data-ed="${esc(e.id)}">Modifica</button> <button class="mini" data-del="${esc(e.id)}">Elimina</button></span></h3>
-     ${e.inizio || e.fine ? `<div class="muted">${esc(e.inizio || "?")}–${esc(e.fine || "?")}${e.pausa ? ` · ☕ ${e.pausa === "CTC" ? "pausa: contattare il responsabile" : "pausa alle " + esc(e.pausa)}` : ""}</div>` : ""}
+     ${e.inizio || e.fine ? `<div class="muted">${esc(e.inizio || "?")}–${esc(e.fine || "?")}${e.pausa ? ` · ☕ ${e.pausa === "CTC" ? "pausa: contatta RIT" : "pausa alle " + esc(e.pausa)}` : ""}</div>` : ""}
      ${(e.voli || []).map(f => `<div class="fli"><span class="t">${esc(f.dalle || "")}${f.alle ? "–" + esc(f.alle) : ""}</span><span><b>${esc(f.volo || f.attivita || "Attività")}</b>${f.destinazione ? " " + esc(f.destinazione) : ""}${f.partenza ? " · part. " + esc(f.partenza) : ""}${f.volo && f.attivita ? " · " + esc(f.attivita) : ""}${f.postazione ? " · " + esc(f.postazione) : ""}${f.gate ? " · <b>Gate " + esc(f.gate) + "</b>" : ""}${f.terminal ? " · " + esc(f.terminal) : ""}${f.note ? `<br><span class="muted">${esc(f.note)}</span>` : ""}</span></div>`).join("")}
      ${e.note ? `<div class="muted" style="margin-top:4px">${esc(e.note)}</div>` : ""}</div>`).join("");
   $("stlist").querySelectorAll("[data-ed]").forEach(b => b.onclick = () => { const e = ST.list.find(x => x.id === b.dataset.ed); ST.draft = JSON.parse(JSON.stringify(e)); if (!ST.draft.voli || !ST.draft.voli.length) ST.draft.voli = [{}]; ST.img = null; renderDraft(""); $("stedit").scrollIntoView({ behavior: "smooth" }); });
