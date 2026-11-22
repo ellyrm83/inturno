@@ -3018,7 +3018,7 @@ async function publishMine() {
   for (const g of CC.mine) {
     if (!CC.groups.has(g)) continue;
     const ref = ST.db.doc("gruppi/" + g + "/dati/" + ST.uid);
-    if (CC.shareG[g]) { if (CC.last[g] === js) continue; try { await ref.set(Object.assign(JSON.parse(js), { aggiornato: new Date().toISOString() })); CC.last[g] = js; pushPing(((CC.groups.get(g) || {}).membri || []), "dati:" + g, js.length + ":" + js.split("").reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) | 0, 0)); } catch (e) { console.warn("pubblicazione", g, e); } }
+    if (CC.shareG[g]) { if (CC.last[g] === js) continue; try { await ref.set(Object.assign(JSON.parse(js), { aggiornato: new Date().toISOString() })); CC.last[g] = js; if (Date.now() - (PUSHQ.st || 0) > 60000) pushPing(((CC.groups.get(g) || {}).membri || []), "dati:" + g, js.length + ":" + js.split("").reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) | 0, 0)); } catch (e) { console.warn("pubblicazione", g, e); } }
     else if (CC.last[g] !== "off") { try { await ref.delete(); CC.last[g] = "off"; } catch (e) { console.warn("ritiro", g, e); } }
   }
 }
@@ -4448,7 +4448,7 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 69</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 70</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
     $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
@@ -4807,7 +4807,9 @@ async function saveDraft() {
   let fw = ""; if (ST.imgBlob) { fw = (await stFotoSave(clean.id, ST.imgBlob)) ? " con la foto" : " (la foto non è stata salvata)"; ST.imgBlob = null; }
   ST.draft = null; ST.img = null;
   $("stedit").innerHTML = `<p class="muted">✓ Statino del ${esc(fmtDate(clean.data))} salvato${fw}${warn}. Resta nel Diario voli.</p>`;
-  renderStList(); if (S.months.length) renderMe(); publishSoon();
+  renderStList(); if (S.months.length) renderMe();
+  try { PUSHQ.st = Date.now(); Object.keys(CC.shareG || {}).filter(g => CC.shareG[g]).forEach(g => { const memb = (CC.groups.get(g) || {}).membri || []; pushPing(memb, "statino:" + g, clean.id + ":" + (clean.salvato || "")); }); } catch (e) {}
+  publishSoon();
 }
 async function delEntry(id) {
   stFotoDel(id);
