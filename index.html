@@ -2169,6 +2169,13 @@ function contBind(root) {
   root.querySelectorAll("[data-cdel]").forEach(b => { b.onclick = () => { SET.contatti.splice(+b.dataset.cdel, 1); saveSet(); again(); }; });
 }
 
+// statino condiviso con un gruppo: scelta per statino; per quelli vecchi vale ancora la condivisione del gruppo
+function sharesTo(e, g) { return Array.isArray(e.gruppi) ? e.gruppi.includes(g) : !!(g && CC.shareG[g]); }
+function sgHtml(d) {
+  const gs = CC.mine.filter(g => CC.groups.has(g));
+  if (!gs.length) return `<p class="muted" style="font-size:12px;margin:6px 0 0">Non sei in nessun gruppo: lo statino resta solo sul tuo telefono.</p>`;
+  return `<div class="chips" style="margin:6px 0 0"><span class="muted" style="font-size:12px">Condividi con:</span>${gs.map(g => `<span class="chip ${d.gruppi.includes(g) ? "sel" : ""}" data-sg="${esc(g)}">${esc(CC.groups.get(g).nome)}</span>`).join("")}</div>`;
+}
 // ================= ORGANIZZA USCITA =================
 const OUT = {
   colazione: { what: "la colazione", label: "☕ Colazione", win: [7.5, 10.5], need: 1.5 },
@@ -3005,10 +3012,10 @@ function ccMutual(gid) {
 }
 function rebuildDocs() { CC.docs = new Map(ccMutual().map(x => [x.u, x.d])); }
 const encC = c => !c ? "" : c.kind === "lavoro" ? "@" + fmtHH(c.start) + "-" + fmtHH(c.end) : c.kind === "riposo" ? "R" : c.kind === "ferie" ? "FER" : c.kind === "off" ? "OFF" : c.kind === "vuoto" || c.kind === "ignoto" ? "" : (c.label || "");
-function myPayload() {
+function myPayload(g) {
   const t = new Date(); const lim = String(t.getFullYear()) + String(t.getMonth()).padStart(2, "0");
   const turni = {}, mods = {};
-  if (P.name) for (const m of S.months) {
+  if (P.name && (g == null || CC.shareG[g])) for (const m of S.months) {
     if (!m.month || m.key < lim || m.predicted) continue;
     const n = findIn(m, P.name); if (!n || (m.fromCC && m.fromCC.has(n))) continue;
     const cs = codesOf(m, n), raw = m.people.get(n) || []; turni[m.key] = cs.map((c, i) => c.mod ? encC(c) : (raw[i] || ""));
@@ -3016,8 +3023,8 @@ function myPayload() {
   }
   const y = new Date(Date.now() - 864e5); const from = isoDay(y);
   const statini = {};
-  ST.list.filter(e => e.data && e.data >= from).forEach(e => { statini[e.data] = { turno: e.turno || "", inizio: e.inizio || "", fine: e.fine || "", terminal: e.terminal || "", pausa: e.pausa || "", voli: (e.voli || []).slice(0, 40), note: e.note || "" }; });
-  return { nome: P.name || "", turni, mods, statini, occupato: occOf() };
+  ST.list.filter(e => e.data && e.data >= from && sharesTo(e, g)).forEach(e => { statini[e.data] = { turno: e.turno || "", inizio: e.inizio || "", fine: e.fine || "", terminal: e.terminal || "", pausa: e.pausa || "", voli: (e.voli || []).slice(0, 40), note: e.note || "" }; });
+  return { nome: P.name || "", turni, mods, statini, occupato: g == null || CC.shareG[g] ? occOf() : {} };
 }
 function publishSoon() { clearTimeout(CC.timer); CC.timer = setTimeout(publishMine, 1500); }
 async function publishMine() {
@@ -3025,12 +3032,12 @@ async function publishMine() {
   // elenco nomi (solo il nome: serve per essere invitate nei gruppi)
   const dirJs = JSON.stringify({ nome: P.name });
   if (CC.last.dir !== dirJs) { try { await ST.db.doc("condivisi/" + ST.uid).set({ nome: P.name, aggiornato: new Date().toISOString() }); CC.last.dir = dirJs; } catch (e) { console.warn("elenco", e); } }
-  const anyShare = CC.mine.some(g => CC.shareG[g]);
-  const js = anyShare ? JSON.stringify(myPayload()) : "";
+  const from = isoDay(new Date(Date.now() - 864e5));
   for (const g of CC.mine) {
     if (!CC.groups.has(g)) continue;
     const ref = ST.db.doc("gruppi/" + g + "/dati/" + ST.uid);
-    if (CC.shareG[g]) { if (CC.last[g] === js) continue; try { await ref.set(Object.assign(JSON.parse(js), { aggiornato: new Date().toISOString() })); CC.last[g] = js; if (Date.now() - (PUSHQ.st || 0) > 60000) pushPing(((CC.groups.get(g) || {}).membri || []), "dati:" + g, js.length + ":" + js.split("").reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) | 0, 0)); } catch (e) { console.warn("pubblicazione", g, e); } }
+    const want = CC.shareG[g] || ST.list.some(e => e.data >= from && sharesTo(e, g));
+    if (want) { const js = JSON.stringify(myPayload(g)); if (CC.last[g] === js) continue; try { await ref.set(Object.assign(JSON.parse(js), { aggiornato: new Date().toISOString() })); CC.last[g] = js; if (Date.now() - (PUSHQ.st || 0) > 60000) pushPing(((CC.groups.get(g) || {}).membri || []), "dati:" + g, js.length + ":" + js.split("").reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) | 0, 0)); } catch (e) { console.warn("pubblicazione", g, e); } }
     else if (CC.last[g] !== "off") { try { await ref.delete(); CC.last[g] = "off"; } catch (e) { console.warn("ritiro", g, e); } }
   }
 }
@@ -4777,13 +4784,14 @@ const v = x => x == null ? "" : esc(x);
 const FFIELDS = [["volo","Volo",""],["destinazione","Destinazione",""],["partenza","Partenza (STD)","time"],["attivita","Attività","w2"],["terminal","Terminal",""],["postazione","Banco",""],["gate","Gate (imbarco)",""],["dalle","Dalle","time"],["alle","Alle","time"],["note","Note","w3"]];
 function renderDraft(msg) {
   const d = ST.draft;
+  if (!Array.isArray(d.gruppi)) d.gruppi = CC.mine.filter(g => CC.shareG[g]);
   let h = (ST.img ? `<img class="thumb" src="${ST.img}">` : "") + (msg ? `<p class="muted">${msg}</p>` : "");
   h += `<div class="fgrid">
    <div><label>Data</label><input type="date" data-k="data" value="${v(d.data)}"></div>
    <div><label>Turno</label><input data-k="turno" value="${v(d.turno)}" placeholder="es. F23"></div>
    <div><label>Inizio</label><input type="time" data-k="inizio" value="${v(d.inizio)}"></div>
    <div><label>Fine</label><input type="time" data-k="fine" value="${v(d.fine)}"></div>
-   <div class="full"><label>☕ Pausa (scritta a penna in fondo)</label><div class="chips" style="margin:0"><input type="time" data-k="pausa" value="${v(/^\d{2}:\d{2}$/.test(d.pausa || "") ? d.pausa : "")}" style="width:120px;display:inline-block"><span class="chip ${d.pausa === "CTC" ? "sel" : ""}" data-ctc="1">CTC · contatta RIT</span></div><div class="chips" style="margin:6px 0 0"><span class="chip ${d.rit ? "sel" : ""}" data-rit="1">📞 Ho contattato il RIT</span><span class="chip ${d.fineT ? "sel" : ""}" data-fine="1">🏁 Assegnato a fine turno</span></div></div>
+   <div class="full"><label>☕ Pausa (scritta a penna in fondo)</label><div class="chips" style="margin:0"><input type="time" data-k="pausa" value="${v(/^\d{2}:\d{2}$/.test(d.pausa || "") ? d.pausa : "")}" style="width:120px;display:inline-block"><span class="chip ${d.pausa === "CTC" ? "sel" : ""}" data-ctc="1">CTC · contatta RIT</span></div><div class="chips" style="margin:6px 0 0"><span class="chip ${d.rit ? "sel" : ""}" data-rit="1">📞 Ho contattato il RIT</span><span class="chip ${d.fineT ? "sel" : ""}" data-fine="1">🏁 Assegnato a fine turno</span></div>${sgHtml(d)}</div>
    <div class="full"><label>Terminal</label><div class="chips">${["T1", "T3"].map(t => `<span class="chip ${d.terminal === t ? "sel" : ""}" data-term="${t}">🛫 ${t}</span>`).join("")}<input data-k="terminal" value="${v(d.terminal)}" placeholder="altro" style="width:90px;display:inline-block"></div></div></div>
    <div class="sec">Voli e attività</div><div id="fls">`;
   d.voli.forEach((f, i) => {
@@ -4803,6 +4811,7 @@ function renderDraft(msg) {
   $("addfl").onclick = () => { d.voli.push({}); renderDraft(msg); };
   $("stedit").querySelectorAll("[data-rit]").forEach(c => c.onclick = () => { d.rit = !d.rit; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-fine]").forEach(c => c.onclick = () => { d.fineT = !d.fineT; renderDraft(msg); });
+  $("stedit").querySelectorAll("[data-sg]").forEach(c => c.onclick = () => { const g = c.dataset.sg; d.gruppi = d.gruppi.includes(g) ? d.gruppi.filter(x => x !== g) : d.gruppi.concat([g]); renderDraft(msg); });
   $("stcancel").onclick = () => { ST.draft = null; ST.img = null; $("stedit").innerHTML = ""; };
   $("stsave").onclick = saveDraft;
 }
@@ -4820,7 +4829,7 @@ async function saveDraft() {
   ST.draft = null; ST.img = null;
   $("stedit").innerHTML = `<p class="muted">✓ Statino del ${esc(fmtDate(clean.data))} salvato${fw}${warn}. Resta nel Diario voli.</p>`;
   renderStList(); if (S.months.length) renderMe();
-  try { PUSHQ.st = Date.now(); Object.keys(CC.shareG || {}).filter(g => CC.shareG[g]).forEach(g => { const memb = (CC.groups.get(g) || {}).membri || []; pushPing(memb, "statino:" + g, clean.id + ":" + (clean.salvato || "")); }); } catch (e) {}
+  try { PUSHQ.st = Date.now(); (clean.gruppi || []).forEach(g => { const memb = (CC.groups.get(g) || {}).membri || []; pushPing(memb, "statino:" + g, clean.id + ":" + (clean.salvato || "")); }); } catch (e) {}
   publishSoon();
 }
 async function delEntry(id) {
