@@ -329,6 +329,7 @@ h2{font-size:16px;margin:0 0 8px}
       </div>
       <div id="stedit"></div>
       <div class="sec" style="margin-top:18px">🗺️ Dove siamo adesso</div><div id="stmap"></div>
+      <div id="propsec"></div>
       <div class="sec" style="margin-top:18px;display:flex;justify-content:space-between;align-items:center">Diario voli (archivio)<button class="mini" id="stexp">⬇ Esporta (Excel)</button></div>
       <div id="stsync" class="muted"></div>
       <input type="text" id="stq" placeholder="Cerca volo, destinazione, data…" autocomplete="off" style="margin-top:8px">
@@ -1611,7 +1612,7 @@ function stMapHtml() {
   return `<div class="mpw">${Ts.map(T => `<div class="mpt ${me && me.T === T ? "mine" : ""}"><div class="mph">${T === "?" ? "Terminal non indicato" : "🛫 " + esc(T)}</div>${stZoneGroup(L.filter(x => (x.T || "?") === T), who)}</div>`).join("")}</div>
     <p class="muted" style="font-size:11px;margin:6px 0 0">Nessun GPS: la posizione viene dal terminal scritto nello statino, e la vedono solo i gruppi con cui condividi.</p>`;
 }
-function stMapRender() { const el = $("stmap"); if (el) el.innerHTML = stMapHtml(); }
+function stMapRender() { const el = $("stmap"); if (el) el.innerHTML = stMapHtml(); const ps = $("propsec"); if (ps && !ps.dataset.ok) { ps.dataset.ok = 1; ps.innerHTML = propPanelHtml(); propBind(ps); } }
 setInterval(() => { if (document.body.dataset.tab === "st") stMapRender(); }, 60000);
 
 // promemoria: avviso 10 minuti prima di ogni attività dello statino di oggi (app aperta o in sottofondo)
@@ -2022,7 +2023,7 @@ function oggiHtml() {
     <div class="oggic"><span class="muted">Domani · ${t1.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" })}</span><div>${dayLine(b && b.c)}</div>
       ${s1 ? `<div class="oggis">▶ ${actLine(stNextAct(s1, "00:00"), s1)}</div>` : ""}</div></div>${warn}${bk}`;
 }
-function oggiRender() { const o = $("oggi"); if (!o) return; try { o.innerHTML = oggiHtml(); } catch (e) { o.innerHTML = ""; console.warn(e); }
+function oggiRender() { const o = $("oggi"); if (!o) return; try { o.innerHTML = oggiHtml() + propInHtml(); propListen(); } catch (e) { o.innerHTML = ""; console.warn(e); }
   const b = $("oggibk"); if (b) b.onclick = () => { openSettings(); setTimeout(() => { const s = $("bksec"); if (s) s.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100); }; }
 setInterval(() => { if (document.body.dataset.tab === "me" && !document.hidden) oggiRender(); }, 120000);
 
@@ -2176,6 +2177,66 @@ function sgHtml(d) {
   if (!gs.length) return `<p class="muted" style="font-size:12px;margin:6px 0 0">Non sei in nessun gruppo: lo statino resta solo sul tuo telefono.</p>`;
   return `<div class="chips" style="margin:6px 0 0"><span class="muted" style="font-size:12px">Condividi con:</span>${gs.map(g => `<span class="chip ${d.gruppi.includes(g) ? "sel" : ""}" data-sg="${esc(g)}">${esc(CC.groups.get(g).nome)}</span>`).join("")}</div>`;
 }
+// ================= PROPOSTE ("ti va un caffè?") ai colleghi che sono al terminal scelto =================
+// Ogni proposta è un documento in "proposte": la vedono solo chi la invia e i destinatari. Nessun numero di telefono.
+const PROP = { inc: [], out: [], unsub: null, unsubOut: null, T: "T1", seen: (() => { try { return JSON.parse(localStorage.getItem("inturno.propSeen") || "[]"); } catch { return []; } })() };
+function propUidOf(nome) { for (const [, map] of CC.gdata) for (const [u, d] of map) if (d && d.nome === nome) return u; return null; }
+function propPanelHtml() {
+  return `<details class="hist" id="propd"><summary>📨 Proponi un caffè</summary>
+    <p class="muted" style="font-size:12px">Scegli il terminal, spunta chi vuoi e invia. Vedono la proposta nell'app e rispondono sì o no. Compaiono solo le colleghe con lo statino condiviso in questo momento.</p>
+    <div class="ovtypes" style="margin:6px 0">${["T1", "T3"].map(T => `<span class="chip ${PROP.T === T ? "sel" : ""}" data-pt="${T}">🛫 ${T}</span>`).join("")}</div>
+    <div id="propl"></div>
+    <label style="font-size:13px">Messaggio</label><input id="proptxt" value="Ti va un caffè?">
+    <div class="stbtn" style="margin-top:6px"><button class="btn" id="propgo">Invia proposta</button></div><div id="propmsg" class="muted" style="font-size:12px"></div>
+    <div id="propout">${propOutHtml()}</div></details>`;
+}
+function propListHtml() {
+  const L = stNowList().filter(x => !x.me && x.T === PROP.T), rows = L.map(x => ({ x, uid: propUidOf(x.nome) })).filter(r => r.uid);
+  if (!rows.length) return `<p class="muted" style="font-size:12px">Nessuna collega con lo statino condiviso al ${PROP.T} adesso.</p>`;
+  return rows.map(r => `<label class="row" style="gap:8px;margin:4px 0"><input type="checkbox" value="${esc(r.uid)}"> <span>${esc(r.x.nome)}</span></label>`).join("");
+}
+function propOutHtml() {
+  if (!PROP.out.length) return "";
+  return `<p class="muted" style="font-size:12px;margin:8px 0 2px">Le tue ultime proposte:</p>` + PROP.out.slice(0, 5).map(x => {
+    const r = Object.values(x.risposte || {}); return `<div style="font-size:12px;margin:2px 0">${esc(x.testo)} → ${x.a.length} · sì ${r.filter(v => v === "sì").length} · no ${r.filter(v => v === "no").length}</div>`;
+  }).join("");
+}
+function propInHtml() {
+  const L = PROP.inc.filter(x => !(x.risposte || {})[ST.uid]); if (!L.length) return "";
+  return `<div class="oggiw">📨 ${L.map(x => `<div style="margin-top:4px"><b>${esc(x.daNome || "Una collega")}</b>: ${esc(x.testo)} <button class="mini" data-pr="${esc(x.id)}|sì">Sì</button> <button class="mini" data-pr="${esc(x.id)}|no">No</button></div>`).join("")}</div>`;
+}
+function propBind(root) {
+  root.querySelectorAll("[data-pt]").forEach(c => c.onclick = () => { PROP.T = c.dataset.pt; root.querySelectorAll("[data-pt]").forEach(o => o.classList.toggle("sel", o === c)); root.querySelector("#propl").innerHTML = propListHtml(); });
+  root.querySelector("#propl").innerHTML = propListHtml();
+  root.querySelector("#propgo").onclick = async () => {
+    const msg = t => { root.querySelector("#propmsg").textContent = t; };
+    const ids = [...root.querySelectorAll("#propl input:checked")].map(i => i.value).filter(Boolean), txt = root.querySelector("#proptxt").value.trim().slice(0, 200);
+    if (!ids.length) return msg("Spunta almeno una persona."); if (!txt) return msg("Scrivi il messaggio.");
+    if (!ST.db || !ST.uid) return msg("Non sei collegata al servizio: riprova tra un momento.");
+    try { await ST.db.collection("proposte").add({ da: ST.uid, daNome: P.name || "", a: ids, testo: txt, creato: new Date().toISOString(), risposte: {} });
+      pushPing(ids, "proposta", Date.now()); msg("✓ Proposta inviata."); root.querySelector("#propl").innerHTML = propListHtml(); }
+    catch (e) { msg("Non inviata: " + (e && e.message || e)); }
+  };
+}
+function propListen() {
+  if (!ST.db || !ST.uid || PROP.unsub) return;
+  PROP.unsub = ST.db.collection("proposte").where("a", "array-contains", ST.uid).onSnapshot(snap => {
+    const now = Date.now(), list = []; (snap.docs || []).forEach(d => { const x = Object.assign({ id: d.id }, d.data()); if (now - new Date(x.creato) < 2 * 864e5) list.push(x); });
+    PROP.inc = list.sort((a, b) => String(b.creato).localeCompare(String(a.creato)));
+    PROP.inc.filter(x => !(x.risposte || {})[ST.uid] && !PROP.seen.includes(x.id) && now - new Date(x.creato) < 36e5).forEach(x => { PROP.seen.push(x.id); ntfSend("☕ " + (x.daNome || "Proposta"), x.testo, "prop:" + x.id); });
+    try { localStorage.setItem("inturno.propSeen", JSON.stringify(PROP.seen.slice(-200))); } catch {}
+    try { oggiRender(); } catch {}
+  }, e => console.warn("proposte", e));
+  PROP.unsubOut = ST.db.collection("proposte").where("da", "==", ST.uid).onSnapshot(snap => {
+    const list = []; (snap.docs || []).forEach(d => list.push(Object.assign({ id: d.id }, d.data()))); PROP.out = list.sort((a, b) => String(b.creato).localeCompare(String(a.creato)));
+    const o = $("propout"); if (o) o.innerHTML = propOutHtml();
+  }, e => console.warn("proposte inviate", e));
+}
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest && ev.target.closest("[data-pr]"); if (!b || !ST.db) return;
+  const [id, v] = b.dataset.pr.split("|"); try { await ST.db.collection("proposte").doc(id).update({ ["risposte." + ST.uid]: v }); } catch (e) { console.warn("risposta", e); }
+});
+
 // ================= ORGANIZZA USCITA =================
 const OUT = {
   colazione: { what: "la colazione", label: "☕ Colazione", win: [7.5, 10.5], need: 1.5 },

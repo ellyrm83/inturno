@@ -95,5 +95,13 @@ service cloud.firestore {
     match /data/users/{uid}/{doc} {
       allow read, write: if signed() && me() == uid;
     }
+
+    // proposte ("ti va un caffè?"): le vedono chi le invia e i destinatari; rispondono solo cambiando la propria risposta
+    match /proposte/{id} {
+      allow read: if approved() && (resource.data.da == me() || me() in resource.data.a);
+      allow create: if approved() && request.resource.data.da == me() && request.resource.data.a is list && request.resource.data.a.size() <= 50;
+      allow update: if approved() && me() in resource.data.a && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['risposte']);
+      allow delete: if approved() && resource.data.da == me();
+    }
   }
 }
