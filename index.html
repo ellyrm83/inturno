@@ -3810,12 +3810,14 @@ function salMese(m, opt) {
     // se la variazione di orario ha già allungato il turno, quella parte non è più "ore in più": si scala (niente doppio conteggio)
     if (X.piu > 0 && c && c.kind === "lavoro" && c.mod && c.mod.tipo === "variazione") {
       const e0 = ex[i + 1] || {}, orig = origOf(m, name, i), rs = e0.rif ? e0.rif.s : (orig && orig.kind === "lavoro" ? orig.start : null), re = e0.rif ? e0.rif.e : (orig && orig.kind === "lavoro" ? orig.end : null);
-      if (rs != null && re != null) { const ext = X.dove === "prima" ? rs - c.start : c.end - re; X.piu = Math.max(0, Math.round((X.piu - Math.max(0, ext)) * 100) / 100); }
+      if (rs != null && re != null) { const ext = c.hours - (re - rs); X.piu = Math.max(0, Math.round((X.piu - Math.max(0, ext)) * 100) / 100); }
     }
     // la parte di turno aggiunta da una variazione (oltre l'orario originale) è allungo: pagata come ore in più, non come turno fisso
     let autoIv = [], baseH = c && c.kind === "lavoro" ? c.hours : 0;
     if (!opt.noExtra && c && c.kind === "lavoro" && c.mod && c.mod.tipo === "variazione") { const orig = origOf(m, name, i);
-      if (orig && orig.kind === "lavoro") { if (c.start < orig.start - 1e-6) autoIv.push([c.start, Math.min(orig.start, c.end)]); if (c.end > orig.end + 1e-6) autoIv.push([Math.max(orig.end, c.start), c.end]);
+      if (orig && orig.kind === "lavoro") { let rem = c.hours - orig.hours; // allungo = solo la durata in più rispetto al turno originale (un turno spostato con la stessa durata non è allungo)
+        if (rem > 1e-6 && c.end > orig.end + 1e-6) { const add = Math.min(rem, c.end - Math.max(orig.end, c.start)); if (add > 1e-6) { autoIv.push([c.end - add, c.end]); rem -= add; } }
+        if (rem > 1e-6 && c.start < orig.start - 1e-6) { const add = Math.min(rem, Math.min(orig.start, c.end) - c.start); if (add > 1e-6) autoIv.push([c.start, c.start + add]); }
         baseH = c.hours - autoIv.reduce((s, v) => s + v[1] - v[0], 0); } }
     const autoH = autoIv.reduce((s, v) => s + v[1] - v[0], 0);
     const row = { i, dt, c, piu: Math.round((X.piu + autoH) * 100) / 100, dove: X.dove, ord: 0, str: 0, xNott: 0, nott: 0, dom: 0, fest: 0, buono: false };
