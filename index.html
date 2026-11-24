@@ -3958,7 +3958,7 @@ function salObBlock(a, m) {
   return `<div class="salko"><div class="salcd"><span>Mancano</span><b>${eur0(manca)}</b><span>netti a ${eur0(ob)}</span></div>
     <p class="muted" style="font-size:12px;margin:6px 0">Spunta come vuoi arrivarci. Le ore si dividono tra le voci spuntate; usa − e + per spostarle da una voce all'altra, le altre si adattano.</p>
     <div class="mxl">${mix.map(x => `<div class="mxr ${x.on ? "" : "off"}"><label class="mxc"><input type="checkbox" data-mxon="${esc(x.k)}" ${x.on ? "checked" : ""}><span>${esc(x.l)}<br><span class="muted">≈ ${eur(x.perH)} netti l'ora${x.disp != null ? ` · disponibili ${hfx(x.disp)} h` : ""}</span></span></label>
-      ${x.on ? `<div class="mxh"><button class="mini" data-mxd="${esc(x.k)}" data-v="-1">−</button><b class="${(M[x.k] || {}).lock ? "lk" : ""}">${hfx(x.h)} h</b><button class="mini" data-mxd="${esc(x.k)}" data-v="1">+</button></div>` : ""}</div>`).join("")}</div>
+      ${x.on ? `<div class="mxh"><button class="mini" data-mxd="${esc(x.k)}" data-v="-0.5">−</button><b class="${(M[x.k] || {}).lock ? "lk" : ""}">${hfx(x.h)} h</b><button class="mini" data-mxd="${esc(x.k)}" data-v="0.5">+</button></div>` : ""}</div>`).join("")}</div>
     <div class="mxt ${ok ? "ok" : ""}">${ok ? "✓" : "…"} Con queste ore: <b>+${eur0(tot)}</b> → netto previsto <b>${eur0(a.netto + tot)}</b>${ok ? "" : ` · mancano ancora ${eur0(manca - tot)}`}</div>
     ${Object.values(M).some(v => v.lock || v.on === false) ? `<button class="mini" data-mxr="1" style="margin-top:6px">↺ Ridistribuisci da capo</button>` : ""}
     <p class="muted" style="font-size:11px;margin:4px 0 0">Stima: le ore vere le segni giorno per giorno sul calendario, e il conto si aggiorna.</p></div>`;
@@ -3980,7 +3980,7 @@ function salMixAct(t) {
   const sec = $("sal"); if (!sec) return; const k = SAL.__mixKey; if (!k || !SAL.mesi[k]) return;
   const M = SAL.mesi[k].mix = SAL.mesi[k].mix || {};
   if (t.dataset.mxr) { SAL.mesi[k].mix = {}; }
-  else if (t.dataset.mxon) { const st = M[t.dataset.mxon] = M[t.dataset.mxon] || {}; st.on = t.checked; if (!t.checked) st.lock = false; }
+  else if (t.dataset.mxon) { const st = M[t.dataset.mxon] = M[t.dataset.mxon] || {}; st.on = t.checked; if (!t.checked) st.lock = false; Object.keys(M).forEach(k2 => { if (k2 !== t.dataset.mxon) M[k2].lock = false; }); } // cambiando le voci spuntate le ore si ricalcolano da sole
   else if (t.dataset.mxd) { const st = M[t.dataset.mxd] = M[t.dataset.mxd] || {}, cur = nz((t.parentNode.querySelector("b") || {}).textContent); st.h = Math.max(0, cur + (+t.dataset.v)); st.lock = true; st.on = true; }
   salSave(); renderSal();
 }
