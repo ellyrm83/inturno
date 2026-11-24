@@ -209,6 +209,29 @@ a.wa{text-decoration:none;display:inline-flex;align-items:center;justify-content
 .err{color:#c0392b;font-size:13px}
 h2{font-size:16px;margin:0 0 8px}
 .sec{font-weight:700;font-size:13px;margin:14px 0 4px}
+
+/* Stipendio: busta come carta d'imbarco */
+.salbig{position:relative;overflow:hidden;border-radius:22px;padding:16px 16px 14px;box-shadow:0 1px 0 var(--line),0 10px 24px -14px rgba(60,40,120,.35)}
+.salbig>.muted:first-child{font-weight:700;font-size:13px;color:var(--ink)}
+.salnum{font-size:46px;line-height:1.05;font-weight:800;letter-spacing:-1.5px;margin:6px 0 12px;font-feature-settings:"tnum"}
+.salbar{height:10px;background:rgba(255,255,255,.55);border-radius:6px}
+@media (prefers-color-scheme:dark){.salbar{background:rgba(255,255,255,.12)}}
+.salbar i{border-radius:6px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.salkpi{position:relative;margin:14px -16px 0;padding:14px 16px 0;border-top:2px dashed color-mix(in srgb,var(--ink) 25%,transparent);text-align:left}
+.salkpi::before,.salkpi::after{content:"";position:absolute;top:-11px;width:20px;height:20px;border-radius:50%;background:var(--bg)}
+.salkpi::before{left:-10px}.salkpi::after{right:-10px}
+.salkpi span{display:flex;flex-direction:column;gap:2px;line-height:1.25}
+.salkpi b{font-size:17px;font-weight:800;order:-1}
+.salkpi br{display:none}
+.salkpi span:nth-child(2) b{color:var(--acc)}
+.salgate{display:flex;align-items:center;gap:12px;margin:0 0 10px;padding:10px 14px;border-radius:16px;background:var(--card);border:1px solid var(--line)}
+.salgate .gd{flex:none;min-width:54px;text-align:center;line-height:1;font-weight:800}
+.salgate .gd b{display:block;font-size:26px;letter-spacing:-1px}
+.salgate .gd small{font-size:12px;font-weight:700;color:var(--mut)}
+.salgate .gt{font-size:13px;line-height:1.35;color:var(--mut)}
+.salgate .gt b{color:var(--ink)}
+.salnav{margin:10px 0}.salnav b{font-size:18px;font-weight:800}
+.salrow{border-radius:14px}
 </style>
 </head>
 <body class="locked">
@@ -3972,7 +3995,7 @@ function renderSal() {
     const ob = nz(MM.obiettivo), tgt = ob || all.netto, pct = v => Math.max(0, Math.min(100, tgt ? v / Math.max(tgt, all.netto) * 100 : 0));
     const obTxt = salObBlock(all, m) + salAliqBlock(m);
     const nx = salProssimoAccredito(ms, C, new Date()), nxNet = nx ? salMese(nx.m).netto : 0;
-    const nxTxt = nx ? `<div class="salbig" style="margin-bottom:8px"><span class="muted" style="font-size:13px">💶 Prossimo accredito</span><div><b>${nx.d.getDate()} ${esc(MESI_L[nx.d.getMonth()])}</b> · ${nx.giorni === 0 ? "oggi" : nx.giorni === 1 ? "domani" : "tra " + nx.giorni + " giorni"} · busta di ${esc(MESI_L[nx.m.month - 1])} · netto stimato <b>${eur0(nxNet)}</b></div></div>` : "";
+    const nxTxt = nx ? `<div class="salgate"><div class="gd"><b>${nx.d.getDate()}</b><small>${esc(MESI_L[nx.d.getMonth()].slice(0, 3))}</small></div><div class="gt"><b>Prossimo accredito · ${nx.giorni === 0 ? "oggi" : nx.giorni === 1 ? "domani" : "tra " + nx.giorni + " giorni"}</b><br>busta di ${esc(MESI_L[nx.m.month - 1])} · netto stimato <b>${eur0(nxNet)}</b></div></div>` : "";
     const warnPrev = all.prevM ? "" : `<p class="muted" style="font-size:13px;margin:0 0 8px;padding:8px;border:1px solid var(--line,#8886);border-radius:8px">⚠️ Manca il calendario di ${esc(MESI_L[(m.month + 10) % 12])}: allunghi, straordinari e mancati riposo della busta di ${esc(busta)} risultano a zero. Caricalo dalla pagina Carica.</p>`;
     h += nxTxt + warnPrev + `<div class="salnav"><button class="mini" id="salp" ${idx <= 0 ? "disabled" : ""}>◀</button><b>${esc(MESI_L[m.month - 1])} ${m.year}</b><button class="mini" id="saln" ${idx >= ms.length - 1 ? "disabled" : ""}>▶</button></div>
       <div class="salbig"><span class="muted">Busta di ${esc(busta)} · netto stimato</span><div class="muted" style="font-size:13px">${pagaTxt}</div><div class="salnum" id="salnet">${eur0(all.netto)}</div>
