@@ -232,6 +232,26 @@ h2{font-size:16px;margin:0 0 8px}
 .salgate .gt b{color:var(--ink)}
 .salnav{margin:10px 0}.salnav b{font-size:18px;font-weight:800}
 .salrow{border-radius:14px}
+
+/* Coerenza grafica: stessa scala di raggi, ombre e titoli in tutta l'app */
+:root{--r1:22px;--r2:14px;--r3:12px;--sh:0 1px 0 var(--line),0 10px 24px -16px rgba(60,40,120,.35)}
+.card{border-radius:var(--r1);box-shadow:var(--sh);padding:16px}
+.card h2,.card h3{font-weight:800;letter-spacing:-.2px}
+.sec{font-size:14px;font-weight:800;margin:16px 0 6px}
+.mini{border-radius:var(--r3);padding:6px 11px;font-weight:700}
+.btn{border-radius:var(--r2);box-shadow:none;font-weight:800}
+.btn:active,.mini:active{transform:scale(.97)}
+.fgrid input,.fl input,.fgrid textarea,select,input[type=text]{border-radius:var(--r3);padding:10px 11px}
+.fgrid input:focus,.fl input:focus,select:focus,input[type=text]:focus{outline:2px solid var(--acc);outline-offset:1px}
+.tabs{border-radius:22px 22px 0 0;box-shadow:0 -10px 24px -16px rgba(60,40,120,.4)}
+.tab{border-radius:var(--r3);font-weight:700}
+.tab.on{box-shadow:none}
+.subtabs .tab{font-weight:700}
+.pill{font-weight:700}
+.salrow,.saltab,.salal,.salbusta{border-radius:var(--r2)}
+.more>summary{font-weight:800}
+.btn:focus-visible,.mini:focus-visible,.tab:focus-visible,summary:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body class="locked">
