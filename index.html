@@ -3919,10 +3919,13 @@ function renderSal() {
     const today = new Date(); today.setHours(23, 59, 59, 0);
     const prev = salMese(m, { noExtra: true }), all = salMese(m), fino = salMese(m, { fino: today, ora: salOra() });
     const busta = C.posticipo ? MESI_L[m.month % 12] + (m.month === 12 ? " " + (m.year + 1) : "") : MESI_L[m.month - 1];
+    // lo stipendio di una busta si paga il giorno indicato (di solito il 10) del mese successivo
+    const pagaD = (() => { const bi = m.month - 1 + (C.posticipo ? 1 : 0), dd = Math.max(1, Math.min(31, Math.round(nz(C.giornoPaga)) || 10)), last = new Date(m.year, bi + 2, 0).getDate(); return new Date(m.year, bi + 1, Math.min(dd, last)); })();
+    const pagaTxt = `💶 Pagamento il ${pagaD.getDate()} ${MESI_L[pagaD.getMonth()]} ${pagaD.getFullYear()}`;
     const ob = nz(MM.obiettivo), tgt = ob || all.netto, pct = v => Math.max(0, Math.min(100, tgt ? v / Math.max(tgt, all.netto) * 100 : 0));
     const obTxt = salObBlock(all, m) + salAliqBlock(m);
     h += `<div class="salnav"><button class="mini" id="salp" ${idx <= 0 ? "disabled" : ""}>◀</button><b>${esc(MESI_L[m.month - 1])} ${m.year}</b><button class="mini" id="saln" ${idx >= ms.length - 1 ? "disabled" : ""}>▶</button></div>
-      <div class="salbig"><span class="muted">Busta di ${esc(busta)} · netto stimato</span><div class="salnum" id="salnet">${eur0(all.netto)}</div>
+      <div class="salbig"><span class="muted">Busta di ${esc(busta)} · netto stimato</span><div class="muted" style="font-size:13px">${pagaTxt}</div><div class="salnum" id="salnet">${eur0(all.netto)}</div>
         <div class="salbar" id="salbar">${salBar(all, fino, ob)}</div>
         <div class="salkpi"><span><b id="salk1">${eur0(prev.netto)}</b><br>previsto dalla griglia</span><span><b id="salk2">${eur0(fino.netto)}</b><br>maturato a oggi</span><span><b id="salk3">${eur0(all.netto)}</b><br>con gli extra</span></div>
         <div class="muted" style="font-size:13px;margin-top:6px" id="salwork">${salLavTxt(fino)}</div>
@@ -4025,7 +4028,7 @@ function salCfgHtml() {
   const C = SAL.cfg, f = (k, l, ph, cls, txt) => `<div class="${cls || ""}"><label>${l}</label><input data-sc="${k}" ${txt ? "" : 'inputmode="decimal"'} value="${esc(C[k] == null ? "" : C[k])}" placeholder="${ph || ""}"></div>`;
   return `<div class="stbtn" style="margin:4px 0"><button class="btn ghost" id="salgocar">📥 Carica la busta paga (dalla pagina Carica)</button></div><div id="salimp"></div><p class="muted" style="font-size:13px">Oppure copia le voci dal tuo cedolino: ogni busta è diversa (livello, maggiorazioni, indennità, cessione del quinto…). Lascia vuoto quello che non hai.</p>
     <div class="ovtypes" style="margin-top:6px"><span class="chip ${C.mode !== "dettagliato" ? "sel" : ""}" data-sm="semplice">Calcolo semplice</span><span class="chip ${C.mode === "dettagliato" ? "sel" : ""}" data-sm="dettagliato">Calcolo dettagliato</span></div>
-    <div class="sec">Retribuzione</div><div class="fgrid">${f("livello", "Livello / qualifica", "es. 4° livello", "", 1)}${f("fisso", "Retribuzione mensile lorda €", "es. 1650")}${f("pagaOra", "Paga oraria lorda €", "es. 10,50")}${f("soglia", "Ore ordinarie massime al giorno", "8")}</div>
+    <div class="sec">Retribuzione</div><div class="fgrid">${f("livello", "Livello / qualifica", "es. 4° livello", "", 1)}${f("fisso", "Retribuzione mensile lorda €", "es. 1650")}${f("pagaOra", "Paga oraria lorda €", "es. 10,50")}${f("soglia", "Ore ordinarie massime al giorno", "8")}${f("giornoPaga", "Giorno di pagamento (mese dopo)", "10")}</div>
     <div class="sec">Maggiorazioni sulle ore di turno (+%)</div><div class="fgrid">${f("percNott", "Notturno", "es. 25")}${f("percDom", "Domenica", "es. 30")}${f("percFest", "Festivo", "es. 50")}${f("percNottDom", "Notte di domenica", "se vuoto: somma")}${f("percNottFest", "Notte festiva", "se vuoto: somma")}${f("patrono", "Patrono (giorno/mese)", "es. 29/6", "", 1)}</div>
     <div class="sec">Ore in più (+%)</div><div class="fgrid">${f("percAll", "Allungo entro le ore ordinarie", "0 = paga normale")}${f("percStr", "Straordinario diurno", "es. 25")}${f("percStrNott", "Straordinario notturno", "se vuoto: somma")}${f("percStrFest", "Straordinario festivo/domenica", "se vuoto: somma")}${f("percMR1", "Mancato R1 (riposo R1)", "es. 50 (vuoto = come straord. festivo)")}${f("percMR2", "Mancato R2 (riposo R2)", "es. 30 (vuoto = come straord. festivo)")}</div>
     <div class="sec">Indennità e altre voci</div><div class="fgrid">${f("ind1", esc(C.ind1n || "Indennità turno") + " € al giorno lavorato", "0")}${f("ind2", esc(C.ind2n || "Altra indennità") + " € al giorno", "0")}${f("buonoVal", "Valore buono pasto €", "es. 7")}</div>
