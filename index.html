@@ -3807,24 +3807,36 @@ function salMese(m, opt) {
   cs.forEach((c, i) => {
     const dt = new Date(m.year, m.month - 1, i + 1); if (opt.fino && dt > opt.fino) return;
     const X = opt.noExtra ? { piu: 0, dove: "dopo" } : salExtra(ex[i + 1] || {});
-    const row = { i, dt, c, piu: X.piu, dove: X.dove, ord: 0, str: 0, xNott: 0, nott: 0, dom: 0, fest: 0, buono: false };
+    // se la variazione di orario ha già allungato il turno, quella parte non è più "ore in più": si scala (niente doppio conteggio)
+    if (X.piu > 0 && c && c.kind === "lavoro" && c.mod && c.mod.tipo === "variazione") {
+      const e0 = ex[i + 1] || {}, orig = origOf(m, name, i), rs = e0.rif ? e0.rif.s : (orig && orig.kind === "lavoro" ? orig.start : null), re = e0.rif ? e0.rif.e : (orig && orig.kind === "lavoro" ? orig.end : null);
+      if (rs != null && re != null) { const ext = X.dove === "prima" ? rs - c.start : c.end - re; X.piu = Math.max(0, Math.round((X.piu - Math.max(0, ext)) * 100) / 100); }
+    }
+    // la parte di turno aggiunta da una variazione (oltre l'orario originale) è allungo: pagata come ore in più, non come turno fisso
+    let autoIv = [], baseH = c && c.kind === "lavoro" ? c.hours : 0;
+    if (!opt.noExtra && c && c.kind === "lavoro" && c.mod && c.mod.tipo === "variazione") { const orig = origOf(m, name, i);
+      if (orig && orig.kind === "lavoro") { if (c.start < orig.start - 1e-6) autoIv.push([c.start, Math.min(orig.start, c.end)]); if (c.end > orig.end + 1e-6) autoIv.push([Math.max(orig.end, c.start), c.end]);
+        baseH = c.hours - autoIv.reduce((s, v) => s + v[1] - v[0], 0); } }
+    const autoH = autoIv.reduce((s, v) => s + v[1] - v[0], 0);
+    const row = { i, dt, c, piu: Math.round((X.piu + autoH) * 100) / 100, dove: X.dove, ord: 0, str: 0, xNott: 0, nott: 0, dom: 0, fest: 0, buono: false };
     const slot = (t, q, fn) => { const hh = ((t % 24) + 24) % 24, day = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + Math.floor(t / 24)); fn(q, NIGHT(hh), day.getDay() === 0, festivo(day)); };
     if (c && c.kind === "lavoro") {
-      R.giorni++; R.lav = (R.lav || 0) + 1; R.ore += c.hours; R.dispOrd += Math.max(0, soglia - c.hours);
+      R.giorni++; R.lav = (R.lav || 0) + 1; R.ore += c.hours; R.dispOrd += Math.max(0, soglia - baseH);
       for (let t = c.start; t < c.end - 1e-6; t += 0.25) slot(t, Math.min(0.25, c.end - t), (q, n, su, ho) => {
+        if (autoIv.some(v => t >= v[0] - 1e-6 && t < v[1] - 1e-6)) return; // conteggiata sotto come allungo
         const v = q * po * maggOrd(p, n, su, ho); if (n) { row.nott += q; } if (su) row.dom += q; if (ho) row.fest += q;
         if (ho) R.mFest += v; else if (su) R.mDom += v; else R.mNott += v; });
       R.nott += row.nott; R.dom += row.dom; R.fest += row.fest;
       R.ind += nz(C.ind1) + nz(C.ind2); R.sostInd += nz(C.ind1);
       if (c.hours >= nz(SET.buonoOre || 6)) { row.buono = true; R.buoni++; }
-      if (X.piu > 0) { // ore in più attaccate al turno: dopo la fine o prima dell'inizio
-        const t0 = X.dove === "prima" ? c.start - X.piu : c.end; let done = X.dove === "prima" ? 0 : c.hours;
-        const ordCap = Math.max(0, soglia - c.hours); let ordUsed = 0;
-        for (let t = t0; t < t0 + X.piu - 1e-6; t += 0.25) slot(t, Math.min(0.25, t0 + X.piu - t), (q, n, su, ho) => {
+      if (X.piu > 0 || autoIv.length) { // ore in più attaccate al turno (dopo la fine o prima dell'inizio) + parte aggiunta da variazioni
+        const ivs = autoIv.map(v => [v[0], v[1] - v[0]]); if (X.piu > 0) ivs.push([X.dove === "prima" ? c.start - X.piu : c.end, X.piu]);
+        const ordCap = Math.max(0, soglia - baseH); let ordUsed = 0;
+        ivs.forEach(([t0, len]) => { for (let t = t0; t < t0 + len - 1e-6; t += 0.25) slot(t, Math.min(0.25, t0 + len - t), (q, n, su, ho) => {
           // prima del turno: le prime ore in più sono quelle più lontane; contiamo come ordinarie le ore fino a raggiungere la soglia
           const isOrd = ordUsed + q <= ordCap + 1e-6; if (isOrd) ordUsed += q;
           if (isOrd) { row.ord += q; R.ordH += q; R.vOrd += q * po * (1 + p.all + maggOrd(p, n, su, ho)); if (n) { R.ordNott += q; row.xNott += q; } }
-          else { const pc = n && (su || ho) ? Math.max(p.strNott, p.strFest) : n ? p.strNott : (su || ho) ? p.strFest : p.str; row.str += q; R.strH += q; R.vStr += q * po * (1 + pc); if (n) { R.strNott += q; row.xNott += q; } } });
+          else { const pc = n && (su || ho) ? Math.max(p.strNott, p.strFest) : n ? p.strNott : (su || ho) ? p.strFest : p.str; row.str += q; R.strH += q; R.vStr += q * po * (1 + pc); if (n) { R.strNott += q; row.xNott += q; } } }); });
       }
     } else if (c && (c.kind === "assenza" || c.kind === "ferie")) { // malattia, 104, ferie: giorno lavorativo pagato, senza buono pasto
       R.giorni++; R.assenze = (R.assenze || 0) + 1;
@@ -3897,7 +3909,7 @@ function renderSal() {
       <div class="salbig"><span class="muted">Busta di ${esc(busta)} · netto stimato</span><div class="salnum" id="salnet">${eur0(all.netto)}</div>
         <div class="salbar" id="salbar">${salBar(all, fino, ob)}</div>
         <div class="salkpi"><span><b id="salk1">${eur0(prev.netto)}</b><br>previsto dalla griglia</span><span><b id="salk2">${eur0(fino.netto)}</b><br>maturato a oggi</span><span><b id="salk3">${eur0(all.netto)}</b><br>con gli extra</span></div>
-        <div class="muted" style="font-size:13px;margin-top:6px" id="salbuo">🍽️ ${all.buoni} buoni pasto${nz(C.buonoVal) ? " = " + eur(all.buoniVal) : ""} · ${all.giorni} giorni lavorativi${all.assenze ? ` (di cui ${all.assenze} di malattia, ferie o permesso)` : ""} · ${hfx(all.ore)} h · 🌙 ${hfx(all.nott)} h notturne${all.ordH ? " · ➕ " + hfx(all.ordH) + " h allungo" : ""}${all.strH ? " · ⏱ " + hfx(all.strH) + " h straordinario" : ""}</div>
+        <div class="muted" style="font-size:13px;margin-top:6px" id="salbuo">🍽️ ${all.buoni} buoni pasto${nz(C.buonoVal) ? " = " + eur(all.buoniVal) : ""} · ${all.giorni} giorni lavorativi${all.assenze ? ` (di cui ${all.assenze} di malattia, ferie o permesso)` : ""} · ${hfx(all.ore)} h · 🌙 ${hfx(all.nott + all.ordNott + all.strNott)} h notturne${all.ordH ? " · ➕ " + hfx(all.ordH) + " h allungo" : ""}${all.strH ? " · ⏱ " + hfx(all.strH) + " h straordinario" : ""}</div>
         <div id="salobt">${obTxt}</div>
         <div class="fgrid" style="margin-top:8px"><div><label>🎯 Obiettivo netto del mese</label><input id="salob" inputmode="decimal" value="${esc(MM.obiettivo || "")}" placeholder="es. 1900"></div><div><label>Netto vero della busta</label><input id="salreal" inputmode="decimal" value="${esc(MM.nettoReale || "")}" placeholder="a fine mese"></div></div>
         ${nz(MM.nettoReale) ? `<p class="muted" style="font-size:13px">Differenza con la stima: <b>${(nz(MM.nettoReale) - all.netto >= 0 ? "+" : "") + eur(nz(MM.nettoReale) - all.netto)}</b>${C.mode !== "dettagliato" && all.lordo ? ` · la tua percentuale netta reale è circa ${Math.round(nz(MM.nettoReale) / all.lordo * 100)}%` : ""}</p>` : ""}
@@ -3919,9 +3931,9 @@ function renderSal() {
   // eventi
   if ($("salp")) { $("salp").onclick = () => { SALM = ms[ms.indexOf(m) - 1].key; renderSal(); }; $("saln").onclick = () => { SALM = ms[ms.indexOf(m) + 1].key; renderSal(); }; }
   const live = SALLIVE = !m ? null : () => { const a = salMese(m), ob2 = nz((SAL.mesi[m.key] || {}).obiettivo); f = salMese(m, { fino: (() => { const t = new Date(); t.setHours(23, 59, 59, 0); return t; })() }); $("salobt").innerHTML = salObBlock(a, m) + salAliqBlock(m); $("salbar").innerHTML = salBar(a, f, ob2); salTabLabel(); $("salnet").textContent = eur0(a.netto); $("salk1").textContent = eur0(salMese(m, { noExtra: true }).netto); $("salk2").textContent = eur0(f.netto); $("salk3").textContent = eur0(a.netto);
-    $("salbuo").textContent = `🍽️ ${a.buoni} buoni pasto${nz(SAL.cfg.buonoVal) ? " = " + eur(a.buoniVal) : ""} · ${a.giorni} giorni lavorativi${a.assenze ? ` (di cui ${a.assenze} di malattia, ferie o permesso)` : ""} · ${hfx(a.ore)} h · 🌙 ${hfx(a.nott)} h notturne${a.ordH ? " · ➕ " + hfx(a.ordH) + " h allungo" : ""}${a.strH ? " · ⏱ " + hfx(a.strH) + " h straordinario" : ""}`; };
+    $("salbuo").textContent = `🍽️ ${a.buoni} buoni pasto${nz(SAL.cfg.buonoVal) ? " = " + eur(a.buoniVal) : ""} · ${a.giorni} giorni lavorativi${a.assenze ? ` (di cui ${a.assenze} di malattia, ferie o permesso)` : ""} · ${hfx(a.ore)} h · 🌙 ${hfx(a.nott + a.ordNott + a.strNott)} h notturne${a.ordH ? " · ➕ " + hfx(a.ordH) + " h allungo" : ""}${a.strH ? " · ⏱ " + hfx(a.strH) + " h straordinario" : ""}`; };
   out.querySelectorAll("input").forEach(i => { i.addEventListener("focus", () => SALT = true); i.addEventListener("blur", () => { SALT = false; }); });
-  out.querySelectorAll("[data-xd]").forEach(i => { const ev = i.tagName === "SELECT" ? "onchange" : "oninput"; i[ev] = () => { const day = +i.dataset.xd, MM = SAL.mesi[m.key]; MM.extra = MM.extra || {}; const d = MM.extra[day] = MM.extra[day] || {}; delete d.str; delete d.all; d[i.dataset.f] = i.value.trim(); salSave(); live(); const a = salMese(m), row = a.rows.find(x => x.i === day - 1), el = out.querySelector(`[data-xr="${day}"]`); if (el && row) el.innerHTML = salSplit(row); }; });
+  out.querySelectorAll("[data-xd]").forEach(i => { const ev = i.tagName === "SELECT" ? "onchange" : "oninput"; i[ev] = () => { const day = +i.dataset.xd, MM = SAL.mesi[m.key]; MM.extra = MM.extra || {}; const d = MM.extra[day] = MM.extra[day] || {}; delete d.str; delete d.all; d[i.dataset.f] = i.value.trim(); salRif(d, m, day); salSave(); live(); const a = salMese(m), row = a.rows.find(x => x.i === day - 1), el = out.querySelector(`[data-xr="${day}"]`); if (el && row) el.innerHTML = salSplit(row); }; });
   out.querySelectorAll("[data-mm]").forEach(i => i.oninput = () => { SAL.mesi[m.key][i.dataset.mm] = i.value.trim(); salSave(); live(); });
   if ($("salob")) { $("salob").oninput = () => { SAL.mesi[m.key].obiettivo = $("salob").value.trim(); salSave(); live(); }; $("salreal").onchange = () => { SAL.mesi[m.key].nettoReale = $("salreal").value.trim(); salSave(); renderSal(); }; }
   out.querySelectorAll("details.salrow").forEach(d => d.addEventListener("toggle", () => {}));
@@ -3972,6 +3984,8 @@ document.addEventListener("change", e => { const t = e.target; if (t && t.datase
 function salBar(a, f, ob) { const top = Math.max(ob || 0, a.netto) || 1; return `<i class="f2" style="width:${Math.min(100, a.netto / top * 100)}%"></i><i style="width:${Math.min(100, f.netto / top * 100)}%"></i>${ob ? `<u style="left:calc(${Math.min(100, ob / top * 100)}% - 2px)"></u>` : ""}`; }
 function salTabLabel() { try { const tab = document.querySelector('.tab[data-t="sal"]'); if (!tab) return; salLoad(); const t = new Date(), k = String(t.getFullYear()) + String(t.getMonth() + 1).padStart(2, "0"), m = S.months.find(x => x.key === k && !x.predicted), ob = nz((SAL.mesi[k] || {}).obiettivo);
   let sub = ""; if (SAL.cfg.on && !SAL.cfg.pin && !(lkOn() && !LKopen) && m && ob) { const a = salMese(m); if (a) sub = a.netto >= ob ? "🎯 raggiunto" : "mancano " + eur0(ob - a.netto); } tab.innerHTML = (tab.closest(".tabs") ? '<span class="ti">💰</span>Stipendio' : "💰 Stipendio") + (sub ? `<small class="tabsub">${esc(sub)}</small>` : ""); } catch (e) {} }
+// ricorda a quale orario del turno erano riferite le ore in più (se il turno cambia dopo, la parte già coperta si scala)
+function salRif(d, m, day) { try { const nm = findIn(m, P.name), c = codesOf(m, nm)[day - 1]; if (c && c.kind === "lavoro") d.rif = { s: c.start, e: c.end }; else delete d.rif; } catch (e) {} }
 function salSplit(r) { if (!r || !r.piu) return ""; const parts = []; if (r.ord) parts.push(`<b>${hfx(r.ord)} h</b> allungo (ordinarie)`); if (r.str) parts.push(`<b>${hfx(r.str)} h</b> straordinario`); return "→ " + parts.join(" + ") + (r.xNott ? ` · ${hfx(r.xNott)} h in fascia notturna` : ""); }
 function salDayHtml(e, r, id) { const d = r.i + 1;
   return `<div class="fgrid"><div><label>Ore in più</label><input data-xd="${d}" data-f="piu" inputmode="decimal" value="${esc(e.piu || (nz(e.str) + nz(e.all) || ""))}" placeholder="0"></div><div><label>Quando</label><select data-xd="${d}" data-f="dove" style="width:100%"><option value="dopo" ${e.dove !== "prima" ? "selected" : ""}>Dopo il turno</option><option value="prima" ${e.dove === "prima" ? "selected" : ""}>Prima del turno</option></select></div></div><div class="muted" style="font-size:12px" data-xr="${d}">${salSplit(r)}</div>`; }
@@ -4035,7 +4049,7 @@ function salOvHtml(m, name, i) {
 }
 function salOvBind(m, name, i) {
   const box = $("ovedit"); if (!box) return;
-  box.querySelectorAll(".salov [data-xd]").forEach(el => { const ev = el.tagName === "SELECT" ? "onchange" : "oninput"; el[ev] = () => { const MM = SAL.mesi[m.key] = SAL.mesi[m.key] || {}; MM.extra = MM.extra || {}; const d = MM.extra[i + 1] = MM.extra[i + 1] || {}; delete d.str; delete d.all; d[el.dataset.f] = el.value.trim(); salSave(); const a = salMese(m), r = a && a.rows.find(x => x.i === i), o = box.querySelector(`[data-xr="${i + 1}"]`); if (o) o.innerHTML = salSplit(r); }; });
+  box.querySelectorAll(".salov [data-xd]").forEach(el => { const ev = el.tagName === "SELECT" ? "onchange" : "oninput"; el[ev] = () => { const MM = SAL.mesi[m.key] = SAL.mesi[m.key] || {}; MM.extra = MM.extra || {}; const d = MM.extra[i + 1] = MM.extra[i + 1] || {}; delete d.str; delete d.all; d[el.dataset.f] = el.value.trim(); salRif(d, m, i + 1); salSave(); const a = salMese(m), r = a && a.rows.find(x => x.i === i), o = box.querySelector(`[data-xr="${i + 1}"]`); if (o) o.innerHTML = salSplit(r); }; });
 }
 { const _ra = renderAll; renderAll = function () { _ra.apply(this, arguments); try { if (!$("t-sal").classList.contains("hidden") && !SALT) renderSal(); } catch (e) {} }; }
 // schede visibili in base al profilo scelto nella configurazione (studente / vita privata: niente turni e busta paga)
