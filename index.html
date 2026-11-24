@@ -3819,9 +3819,11 @@ function salMese(m, opt) {
         baseH = c.hours - autoIv.reduce((s, v) => s + v[1] - v[0], 0); } }
     const autoH = autoIv.reduce((s, v) => s + v[1] - v[0], 0);
     const row = { i, dt, c, piu: Math.round((X.piu + autoH) * 100) / 100, dove: X.dove, ord: 0, str: 0, xNott: 0, nott: 0, dom: 0, fest: 0, buono: false };
-    const slot = (t, q, fn) => { const hh = ((t % 24) + 24) % 24, day = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + Math.floor(t / 24)); fn(q, NIGHT(hh), day.getDay() === 0, festivo(day)); };
+    // per "maturato a oggi": oggi conta solo fino all'ora attuale (opt.ora), i giorni passati per intero
+    const cut = opt.fino && opt.ora != null && dt.toDateString() === opt.fino.toDateString() ? opt.ora : null;
+    const slot = (t, q, fn) => { if (cut != null) { if (t >= cut - 1e-9) return; q = Math.min(q, cut - t); } const hh = ((t % 24) + 24) % 24, day = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + Math.floor(t / 24)); fn(q, NIGHT(hh), day.getDay() === 0, festivo(day)); };
     if (c && c.kind === "lavoro") {
-      R.giorni++; R.lav = (R.lav || 0) + 1; R.ore += c.hours; R.dispOrd += Math.max(0, soglia - baseH);
+      R.giorni++; R.lav = (R.lav || 0) + 1; R.ore += cut != null ? Math.max(0, Math.min(c.end, cut) - c.start) : c.hours; R.dispOrd += Math.max(0, soglia - baseH);
       for (let t = c.start; t < c.end - 1e-6; t += 0.25) slot(t, Math.min(0.25, c.end - t), (q, n, su, ho) => {
         if (autoIv.some(v => t >= v[0] - 1e-6 && t < v[1] - 1e-6)) return; // conteggiata sotto come allungo
         const v = q * po * maggOrd(p, n, su, ho); if (n) { row.nott += q; } if (su) row.dom += q; if (ho) row.fest += q;
@@ -3901,7 +3903,7 @@ function renderSal() {
   else {
     const idx = ms.indexOf(m), MM = SAL.mesi[m.key] = SAL.mesi[m.key] || {};
     const today = new Date(); today.setHours(23, 59, 59, 0);
-    const prev = salMese(m, { noExtra: true }), all = salMese(m), fino = salMese(m, { fino: today });
+    const prev = salMese(m, { noExtra: true }), all = salMese(m), fino = salMese(m, { fino: today, ora: salOra() });
     const busta = C.posticipo ? MESI_L[m.month % 12] + (m.month === 12 ? " " + (m.year + 1) : "") : MESI_L[m.month - 1];
     const ob = nz(MM.obiettivo), tgt = ob || all.netto, pct = v => Math.max(0, Math.min(100, tgt ? v / Math.max(tgt, all.netto) * 100 : 0));
     const obTxt = salObBlock(all, m) + salAliqBlock(m);
@@ -3909,6 +3911,7 @@ function renderSal() {
       <div class="salbig"><span class="muted">Busta di ${esc(busta)} · netto stimato</span><div class="salnum" id="salnet">${eur0(all.netto)}</div>
         <div class="salbar" id="salbar">${salBar(all, fino, ob)}</div>
         <div class="salkpi"><span><b id="salk1">${eur0(prev.netto)}</b><br>previsto dalla griglia</span><span><b id="salk2">${eur0(fino.netto)}</b><br>maturato a oggi</span><span><b id="salk3">${eur0(all.netto)}</b><br>con gli extra</span></div>
+        <div class="muted" style="font-size:13px;margin-top:6px" id="salwork">${salLavTxt(fino)}</div>
         <div class="muted" style="font-size:13px;margin-top:6px" id="salbuo">🍽️ ${all.buoni} buoni pasto${nz(C.buonoVal) ? " = " + eur(all.buoniVal) : ""} · ${all.giorni} giorni lavorativi${all.assenze ? ` (di cui ${all.assenze} di malattia, ferie o permesso)` : ""} · ${hfx(all.ore)} h · 🌙 ${hfx(all.nott + all.ordNott + all.strNott)} h notturne${all.ordH ? " · ➕ " + hfx(all.ordH) + " h allungo" : ""}${all.strH ? " · ⏱ " + hfx(all.strH) + " h straordinario" : ""}</div>
         <div id="salobt">${obTxt}</div>
         <div class="fgrid" style="margin-top:8px"><div><label>🎯 Obiettivo netto del mese</label><input id="salob" inputmode="decimal" value="${esc(MM.obiettivo || "")}" placeholder="es. 1900"></div><div><label>Netto vero della busta</label><input id="salreal" inputmode="decimal" value="${esc(MM.nettoReale || "")}" placeholder="a fine mese"></div></div>
@@ -3930,7 +3933,7 @@ function renderSal() {
   out.innerHTML = h;
   // eventi
   if ($("salp")) { $("salp").onclick = () => { SALM = ms[ms.indexOf(m) - 1].key; renderSal(); }; $("saln").onclick = () => { SALM = ms[ms.indexOf(m) + 1].key; renderSal(); }; }
-  const live = SALLIVE = !m ? null : () => { const a = salMese(m), ob2 = nz((SAL.mesi[m.key] || {}).obiettivo); f = salMese(m, { fino: (() => { const t = new Date(); t.setHours(23, 59, 59, 0); return t; })() }); $("salobt").innerHTML = salObBlock(a, m) + salAliqBlock(m); $("salbar").innerHTML = salBar(a, f, ob2); salTabLabel(); $("salnet").textContent = eur0(a.netto); $("salk1").textContent = eur0(salMese(m, { noExtra: true }).netto); $("salk2").textContent = eur0(f.netto); $("salk3").textContent = eur0(a.netto);
+  const live = SALLIVE = !m ? null : () => { const a = salMese(m), ob2 = nz((SAL.mesi[m.key] || {}).obiettivo); f = salMese(m, { fino: (() => { const t = new Date(); t.setHours(23, 59, 59, 0); return t; })(), ora: salOra() }); $("salwork").innerHTML = salLavTxt(f); $("salobt").innerHTML = salObBlock(a, m) + salAliqBlock(m); $("salbar").innerHTML = salBar(a, f, ob2); salTabLabel(); $("salnet").textContent = eur0(a.netto); $("salk1").textContent = eur0(salMese(m, { noExtra: true }).netto); $("salk2").textContent = eur0(f.netto); $("salk3").textContent = eur0(a.netto);
     $("salbuo").textContent = `🍽️ ${a.buoni} buoni pasto${nz(SAL.cfg.buonoVal) ? " = " + eur(a.buoniVal) : ""} · ${a.giorni} giorni lavorativi${a.assenze ? ` (di cui ${a.assenze} di malattia, ferie o permesso)` : ""} · ${hfx(a.ore)} h · 🌙 ${hfx(a.nott + a.ordNott + a.strNott)} h notturne${a.ordH ? " · ➕ " + hfx(a.ordH) + " h allungo" : ""}${a.strH ? " · ⏱ " + hfx(a.strH) + " h straordinario" : ""}`; };
   out.querySelectorAll("input").forEach(i => { i.addEventListener("focus", () => SALT = true); i.addEventListener("blur", () => { SALT = false; }); });
   out.querySelectorAll("[data-xd]").forEach(i => { const ev = i.tagName === "SELECT" ? "onchange" : "oninput"; i[ev] = () => { const day = +i.dataset.xd, MM = SAL.mesi[m.key]; MM.extra = MM.extra || {}; const d = MM.extra[day] = MM.extra[day] || {}; delete d.str; delete d.all; d[i.dataset.f] = i.value.trim(); salRif(d, m, day); salSave(); live(); const a = salMese(m), row = a.rows.find(x => x.i === day - 1), el = out.querySelector(`[data-xr="${day}"]`); if (el && row) el.innerHTML = salSplit(row); }; });
@@ -3984,6 +3987,9 @@ document.addEventListener("change", e => { const t = e.target; if (t && t.datase
 function salBar(a, f, ob) { const top = Math.max(ob || 0, a.netto) || 1; return `<i class="f2" style="width:${Math.min(100, a.netto / top * 100)}%"></i><i style="width:${Math.min(100, f.netto / top * 100)}%"></i>${ob ? `<u style="left:calc(${Math.min(100, ob / top * 100)}% - 2px)"></u>` : ""}`; }
 function salTabLabel() { try { const tab = document.querySelector('.tab[data-t="sal"]'); if (!tab) return; salLoad(); const t = new Date(), k = String(t.getFullYear()) + String(t.getMonth() + 1).padStart(2, "0"), m = S.months.find(x => x.key === k && !x.predicted), ob = nz((SAL.mesi[k] || {}).obiettivo);
   let sub = ""; if (SAL.cfg.on && !SAL.cfg.pin && !(lkOn() && !LKopen) && m && ob) { const a = salMese(m); if (a) sub = a.netto >= ob ? "🎯 raggiunto" : "mancano " + eur0(ob - a.netto); } tab.innerHTML = (tab.closest(".tabs") ? '<span class="ti">💰</span>Stipendio' : "💰 Stipendio") + (sub ? `<small class="tabsub">${esc(sub)}</small>` : ""); } catch (e) {} }
+// ore del giorno trascorse adesso (per contare oggi solo fino a ora) e riepilogo delle ore realmente lavorate a oggi
+function salOra() { const t = new Date(); return t.getHours() + t.getMinutes() / 60; }
+function salLavTxt(f) { if (!f) return ""; const n = f.nott + f.ordNott + f.strNott; return `⏱ Lavorate a oggi: <b>${hfx(f.ore)} h</b>${n ? " · 🌙 " + hfx(n) + " h notturne" : ""}${f.ordH ? " · ➕ " + hfx(f.ordH) + " h allungo" : ""}${f.strH ? " · ⏱ " + hfx(f.strH) + " h straordinario" : ""}`; }
 // ricorda a quale orario del turno erano riferite le ore in più (se il turno cambia dopo, la parte già coperta si scala)
 function salRif(d, m, day) { try { const nm = findIn(m, P.name), c = codesOf(m, nm)[day - 1]; if (c && c.kind === "lavoro") d.rif = { s: c.start, e: c.end }; else delete d.rif; } catch (e) {} }
 function salSplit(r) { if (!r || !r.piu) return ""; const parts = []; if (r.ord) parts.push(`<b>${hfx(r.ord)} h</b> allungo (ordinarie)`); if (r.str) parts.push(`<b>${hfx(r.str)} h</b> straordinario`); return "→ " + parts.join(" + ") + (r.xNott ? ` · ${hfx(r.xNott)} h in fascia notturna` : ""); }
