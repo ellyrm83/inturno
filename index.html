@@ -3920,8 +3920,8 @@ function renderSal() {
     const prev = salMese(m, { noExtra: true }), all = salMese(m), fino = salMese(m, { fino: today, ora: salOra() });
     const busta = C.posticipo ? MESI_L[m.month % 12] + (m.month === 12 ? " " + (m.year + 1) : "") : MESI_L[m.month - 1];
     // lo stipendio di una busta si paga il giorno indicato (di solito il 10) del mese successivo
-    const pagaD = (() => { const bi = m.month - 1 + (C.posticipo ? 1 : 0), dd = Math.max(1, Math.min(31, Math.round(nz(C.giornoPaga)) || 10)), last = new Date(m.year, bi + 2, 0).getDate(); return new Date(m.year, bi + 1, Math.min(dd, last)); })();
-    const pagaTxt = `💶 Pagamento il ${pagaD.getDate()} ${MESI_L[pagaD.getMonth()]} ${pagaD.getFullYear()}`;
+    const pagaD = (() => { const bi = m.month - 1 + (C.posticipo ? 1 : 0), dd = Math.max(1, Math.min(31, Math.round(nz(C.giornoPaga)) || 10)), last = new Date(m.year, bi + 2, 0).getDate(); const d0 = new Date(m.year, bi + 1, Math.min(dd, last)), d = new Date(d0); while (d.getDay() === 0 || d.getDay() === 6 || festivo(d)) d.setDate(d.getDate() - 1); /* sabato, domenica o festivo: si paga il giorno lavorativo prima */ d.moved = d.getTime() !== d0.getTime(); d.orig = d0.getDate(); return d; })();
+    const pagaTxt = `💶 Pagamento il ${pagaD.getDate()} ${MESI_L[pagaD.getMonth()]} ${pagaD.getFullYear()}${pagaD.moved ? ` (anticipato: il ${pagaD.orig} cade di sabato, domenica o festivo)` : ""}`;
     const ob = nz(MM.obiettivo), tgt = ob || all.netto, pct = v => Math.max(0, Math.min(100, tgt ? v / Math.max(tgt, all.netto) * 100 : 0));
     const obTxt = salObBlock(all, m) + salAliqBlock(m);
     h += `<div class="salnav"><button class="mini" id="salp" ${idx <= 0 ? "disabled" : ""}>◀</button><b>${esc(MESI_L[m.month - 1])} ${m.year}</b><button class="mini" id="saln" ${idx >= ms.length - 1 ? "disabled" : ""}>▶</button></div>
