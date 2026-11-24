@@ -3800,6 +3800,14 @@ function maggOrd(p, night, sun, hol) { return night && hol ? p.nottFest : night 
 function salExtra(e) { return { piu: nz(e.piu) || (nz(e.str) + nz(e.all)), dove: e.dove === "prima" ? "prima" : "dopo" }; }
 // La busta del mese M contiene le retribuzioni di M (fisso, maggiorazioni, indennità, buoni) ma allunghi e straordinari del mese precedente (M-1).
 // Es.: lo stipendio che entra il 10 novembre è la busta di ottobre con allunghi e straordinari di settembre.
+// Data di pagamento della busta di un mese: il giorno indicato (di solito il 10) del mese successivo.
+// Se cade di sabato o domenica si paga il giorno prima (il 9); se è un festivo infrasettimanale, il giorno lavorativo prima.
+function salPagaData(m, C) {
+  const bi = m.month - 1 + (C.posticipo ? 1 : 0), dd = Math.max(1, Math.min(31, Math.round(nz(C.giornoPaga)) || 10)), last = new Date(m.year, bi + 2, 0).getDate();
+  const d0 = new Date(m.year, bi + 1, Math.min(dd, last)), d = new Date(d0);
+  if (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1); else while (festivo(d) || d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  d.moved = d.getTime() !== d0.getTime(); d.orig = d0.getDate(); return d;
+}
 function salPrevM(m) { const py = m.month === 1 ? m.year - 1 : m.year, pmn = m.month === 1 ? 12 : m.month - 1; return salMonths().find(x => x.year === py && x.month === pmn) || null; }
 function salMese(m, opt) {
   opt = opt || {}; const pm = salPrevM(m);
@@ -3825,7 +3833,7 @@ function salMeseRaw(m, opt) {
     }
     // la parte di turno aggiunta da una variazione (oltre l'orario originale) è allungo: pagata come ore in più, non come turno fisso
     let autoIv = [], baseH = c && c.kind === "lavoro" ? c.hours : 0;
-    if (!opt.noExtra && c && c.kind === "lavoro" && c.mod && c.mod.tipo === "variazione") { const orig = origOf(m, name, i);
+    if (c && c.kind === "lavoro" && c.mod && c.mod.tipo === "variazione") { const orig = origOf(m, name, i);
       if (orig && orig.kind === "lavoro") { let rem = c.hours - orig.hours; // allungo = solo la durata in più rispetto al turno originale (un turno spostato con la stessa durata non è allungo)
         if (rem > 1e-6 && c.end > orig.end + 1e-6) { const add = Math.min(rem, c.end - Math.max(orig.end, c.start)); if (add > 1e-6) { autoIv.push([c.end - add, c.end]); rem -= add; } }
         if (rem > 1e-6 && c.start < orig.start - 1e-6) { const add = Math.min(rem, Math.min(orig.start, c.end) - c.start); if (add > 1e-6) autoIv.push([c.start, c.start + add]); }
@@ -3844,7 +3852,7 @@ function salMeseRaw(m, opt) {
       R.nott += row.nott; R.dom += row.dom; R.fest += row.fest;
       R.ind += nz(C.ind1) + nz(C.ind2); R.sostInd += nz(C.ind1);
       if (c.hours >= nz(SET.buonoOre || 6)) { row.buono = true; R.buoni++; }
-      if (X.piu > 0 || autoIv.length) { // ore in più attaccate al turno (dopo la fine o prima dell'inizio) + parte aggiunta da variazioni
+      if (!opt.noExtra && (X.piu > 0 || autoIv.length)) { // ore in più attaccate al turno (dopo la fine o prima dell'inizio) + parte aggiunta da variazioni
         const ivs = autoIv.map(v => [v[0], v[1] - v[0]]); if (X.piu > 0) ivs.push([X.dove === "prima" ? c.start - X.piu : c.end, X.piu]);
         const ordCap = Math.max(0, soglia - baseH); let ordUsed = 0;
         ivs.forEach(([t0, len]) => { for (let t = t0; t < t0 + len - 1e-6; t += 0.25) slot(t, Math.min(0.25, t0 + len - t), (q, n, su, ho) => {
@@ -3920,7 +3928,7 @@ function renderSal() {
     const prev = salMese(m, { noExtra: true }), all = salMese(m), fino = salMese(m, { fino: today, ora: salOra() });
     const busta = C.posticipo ? MESI_L[m.month % 12] + (m.month === 12 ? " " + (m.year + 1) : "") : MESI_L[m.month - 1];
     // lo stipendio di una busta si paga il giorno indicato (di solito il 10) del mese successivo
-    const pagaD = (() => { const bi = m.month - 1 + (C.posticipo ? 1 : 0), dd = Math.max(1, Math.min(31, Math.round(nz(C.giornoPaga)) || 10)), last = new Date(m.year, bi + 2, 0).getDate(); const d0 = new Date(m.year, bi + 1, Math.min(dd, last)), d = new Date(d0); if (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1); else while (festivo(d) || d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1); /* il 10 di sabato o domenica si paga il 9; se è un festivo infrasettimanale, il giorno prima */ d.moved = d.getTime() !== d0.getTime(); d.orig = d0.getDate(); return d; })();
+    const pagaD = salPagaData(m, C);
     const pagaTxt = `💶 Pagamento il ${pagaD.getDate()} ${MESI_L[pagaD.getMonth()]} ${pagaD.getFullYear()}${pagaD.moved ? ` (anticipato: il ${pagaD.orig} cade di sabato, domenica o festivo)` : ""}`;
     const ob = nz(MM.obiettivo), tgt = ob || all.netto, pct = v => Math.max(0, Math.min(100, tgt ? v / Math.max(tgt, all.netto) * 100 : 0));
     const obTxt = salObBlock(all, m) + salAliqBlock(m);
