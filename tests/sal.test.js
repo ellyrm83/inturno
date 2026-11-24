@@ -74,3 +74,28 @@ test("giorno di pagamento configurabile", () => {
   const api = nuovo(), d = api.salPagaData({ year: 2026, month: 11 }, Object.assign({}, CFG, { giornoPaga: "15" })); // 15 dicembre 2026 è un martedì
   assert.equal(d.getDate(), 15);
 });
+
+test("mancato riposo: un riposo R1 lavorato è pagato con la percentuale del mancato riposo, nella busta del mese dopo", () => {
+  const api = nuovo(); api.SAL.cfg.percMR1 = "100";
+  const nov = mese(2026, 11, { 12: "R1" }), dic = mese(2026, 12, {}); aggiungi(api, nov, dic);
+  api.OV["2026-11:11"] = { tipo: "variazione", inizio: "15:00", fine: "21:00" }; // il riposo diventa un turno 15-21
+  const b = api.salMese(dic);
+  vicino(b.mrH, 6, "ore di mancato riposo"); vicino(b.vMR, 6 * 10 * (1 + 1), "importo = ore × paga oraria × (1 + 100%)");
+  vicino(b.ordH, 0, "non è allungo"); vicino(b.strH, 0, "non è straordinario");
+  const nv = api.salMese(nov); vicino(nv.vMR, 0, "nella busta di novembre non c'è"); vicino(nv.mNott, 0, "né maggiorazione notturna a parte");
+});
+
+test("mancato riposo senza percentuale impostata: usa quella dello straordinario festivo", () => {
+  const api = nuovo(), nov = mese(2026, 11, { 12: "R2" }), dic = mese(2026, 12, {}); aggiungi(api, nov, dic);
+  api.OV["2026-11:11"] = { tipo: "variazione", inizio: "10:00", fine: "16:00" };
+  vicino(api.salMese(dic).vMR, 6 * 10 * 1.3, "fallback straordinario +30%");
+});
+
+test("busta importata: le voci nuove (mancato riposo) entrano nelle regole, senza toccare quelle già impostate", () => {
+  const api = nuovo(), C = api.SAL.cfg;
+  let r = api.salRegoleDaBusta([{ n: "MANCATO RIPOSO R1 60%", base: "6,00", piu: "36,00" }, { n: "Indennita' di turno", piu: "5,00" }, { n: "Rimborso spese vario", piu: "20,00" }], C);
+  assert.equal(C.percMR1, "60"); assert.equal(r.agg.length, 1); assert.equal(JSON.stringify(r.ign), JSON.stringify(["Rimborso spese vario"])); // (JSON: gli array vengono da un altro ambiente di esecuzione)
+  C.percMR1 = "75"; r = api.salRegoleDaBusta([{ n: "MANCATO RIPOSO R1 60%" }], C); assert.equal(C.percMR1, "75"); assert.equal(r.agg.length, 0); // non sovrascrive
+  r = api.salRegoleDaBusta([{ n: "MANC. RIPOSO R2", base: "15,00", piu: "90,00" }], C); // senza %: ricavata da 15 € sull'ora a 10 €/h => +50%
+  assert.equal(C.percMR2, "50");
+});

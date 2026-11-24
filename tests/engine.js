@@ -35,7 +35,7 @@ function grabConst(name) {
   return src.slice(start, scan(start, false));
 }
 
-const FUNZIONI = ["salMese", "salMeseRaw", "salPrevM", "salPagaData", "salMonths", "salExtra", "festivo", "pasqua", "salPct", "maggOrd", "salNet", "findIn", "matchName", "applyOv", "decode", "tH", "nightOf", "tHm", "origOf"];
+const FUNZIONI = ["salMese", "salMeseRaw", "salPrevM", "salPagaData", "salMonths", "salExtra", "festivo", "pasqua", "salPct", "maggOrd", "salNet", "findIn", "matchName", "applyOv", "decode", "tH", "nightOf", "tHm", "origOf", "salRegoleDaBusta"];
 const COSTANTI = ["nz", "hfx", "NIGHT"];
 
 function creaAmbiente({ cfg = {}, nome = "ELISA" } = {}) {
@@ -43,6 +43,7 @@ function creaAmbiente({ cfg = {}, nome = "ELISA" } = {}) {
   for (const nome of [...FUNZIONI, ...COSTANTI]) { const t = grabFn(nome) || grabConst(nome); if (!t) throw new Error("Nel codice dell'app non trovo: " + nome); parti.push(t); }
   const ctx = { console, Math, Date, JSON, Map, Set, window: {} };
   vm.createContext(ctx);
+  ctx.window.__IT_RULES = { legenda: [{ code: "R1", tipo: "riposo" }, { code: "R2", tipo: "riposo" }] }; // come nelle regole reali: R1/R2 sono riposi
   const codice = `
     const S = { months: [] };
     const SET = { nDa: "20:00", nA: "08:00" };
@@ -53,7 +54,7 @@ function creaAmbiente({ cfg = {}, nome = "ELISA" } = {}) {
     ${parti.join("\n")}
     // nel test le variazioni sono salvate come OV["<chiave mese>:<giorno 0-based>"]
     function codesOf(m, name) { return (m.people.get(name) || []).map((code, i) => { const o = OV[m.key + ":" + i]; return o ? applyOv(decode(code), o) : decode(code); }); }
-    globalThis.__api = { S, SAL, OV, P, SET, salMese, salMeseRaw, salPagaData, salPrevM, nz };
+    globalThis.__api = { S, SAL, OV, P, SET, salMese, salMeseRaw, salPagaData, salPrevM, nz, salRegoleDaBusta };
   `;
   vm.runInContext(codice, ctx, { filename: "app(index.html)" });
   return ctx.__api;

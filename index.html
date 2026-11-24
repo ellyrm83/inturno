@@ -1444,6 +1444,23 @@ function impPanel() {
   };
   box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
+// Controllo delle voci a ogni busta importata: le voci che le regole di calcolo non conoscono ancora vengono aggiunte
+// (es. mancato riposo R1/R2: dalla riga della busta ricavo la percentuale). Non sovrascrive quello che hai già impostato.
+function salRegoleDaBusta(righe, C) {
+  const agg = [], po = nz(C.pagaOra), ign = [];
+  const NOTO = /RETRIBUZ|STIPENDIO|PAGA BASE|MINIMO|CONTINGENZA|SCATTI|ANZIANIT|MAGG|STRAORD|IND(\.|ENNIT)|NOTT|DOMEN|FESTIV|BUON|TICKET|L\.?\s?104|PERM|MALATT|ASSENZ|FERIE|ROL\b|CONGEDO|IRPEF|ADDIZ|INPS|IVS|CONTRIB|IMP\.?\s?SOST|FONDO|PREVAER|COMETA|\b207\b|CUNEO|BONUS|TRATT|ARROTOND|TFR|MANC.*RIP|RIP.*(MANC|LAVOR)/i;
+  for (const r of righe || []) {
+    const n = String(r.n || "").toUpperCase(); if (!n) continue;
+    if (/MANC\w*\.?\s*RIP|RIP\w*\.?\s*(MANC|LAVOR)|\bMR\s?[12]\b/.test(n)) {
+      const k = /(R|RIP\w*\.?)\s?2\b|\bMR\s?2\b/.test(n) ? "percMR2" : /(R|RIP\w*\.?)\s?1\b|\bMR\s?1\b/.test(n) ? "percMR1" : "percMR";
+      if (nz(C[k])) continue; // già nelle regole
+      let pc = nz(((n.match(/(\d{1,3}(?:,\d{1,2})?)\s*%/) || [])[1]) || 0);
+      if (!pc) { const u = nz(r.base); if (u > 0 && po > 0) { const q = u / po; pc = q >= 1 ? (q - 1) * 100 : q * 100; } }
+      if (pc > 0 && pc < 300) { C[k] = String(Math.round(pc * 100) / 100).replace(".", ","); agg.push({ k, n: r.n, pc: Math.round(pc * 100) / 100 }); }
+    } else if (r.piu != null && !NOTO.test(n)) ign.push(r.n);
+  }
+  return { agg, ign };
+}
 function impBusta(d, out) {
   salLoad(); const C = SAL.cfg, it = s => String(s).replace(".", ","); let n = 0;
   const V = Object.assign({}, d.voci || {}); if (+V.parttime > 0 && +V.parttime < 100 && +V.fisso > 0 && !V.fissoEffettivo) V.fisso = Math.round(V.fisso * V.parttime) / 100; delete V.parttime; delete V.fissoEffettivo; const NP = V.nettoPerc; delete V.nettoPerc;
@@ -1458,8 +1475,9 @@ function impBusta(d, out) {
   else if (d.voci && d.voci.nettoPerc) C.nettoPerc = it(d.voci.nettoPerc);
   if (d.fondo && +d.fondo.perc > 0) { C.fondoPerc = it(d.fondo.perc); if (+d.fondo.base > 0) C.fondoBase = it(d.fondo.base); n++; }
   if ((d.righe || []).length) { SAL.buste = SAL.buste || {}; const mk = /^(\d{1,2})\/(\d{4})$/.test(d.mese || "") ? d.mese.replace(/^(\d{1,2})\/(\d{4})$/, (m, a, b) => b + "-" + a.padStart(2, "0")) : "ultima"; SAL.buste[mk] = { righe: d.righe, lordo: d.lordo, netto: d.netto, totali: d.totali || {}, note: d.note || "" }; }
+  const RB = salRegoleDaBusta(d.righe, C); n += RB.agg.length;
   C.on = true; salSave();
-  out.innerHTML = `<p class="muted">✓ Busta paga importata: ${n} voci per il calcolo${(d.righe || []).length ? ` e tutte le ${d.righe.length} righe della busta` : ""}. Le trovi in 💰 Stipendio: la busta completa in 📑 Buste importate, le voci del calcolo in ⚙️ Dati della busta paga, dove puoi correggerle. I dati restano solo su questo telefono.</p>`;
+  out.innerHTML = `${RB.agg.length ? `<p class="muted">➕ Nuove regole dalla busta: ${RB.agg.map(a => esc(a.n) + " = +" + a.pc + "%").join(", ")}.</p>` : ""}${RB.ign.length ? `<p class="muted">ℹ️ Voci della busta che non so ancora come calcolare: ${RB.ign.map(esc).join(", ")}.</p>` : ""}<p class="muted">✓ Busta paga importata: ${n} voci per il calcolo${(d.righe || []).length ? ` e tutte le ${d.righe.length} righe della busta` : ""}. Le trovi in 💰 Stipendio: la busta completa in 📑 Buste importate, le voci del calcolo in ⚙️ Dati della busta paga, dove puoi correggerle. I dati restano solo su questo telefono.</p>`;
   try { localStorage.setItem(SALKEY || SALK(), JSON.stringify(SAL)); } catch (e) {}
   try { renderAll(); } catch (e) {}
   setTimeout(() => { try { setMode("turni"); showTab("sal"); const B = document.querySelector("details.more:has(.salbusta)"); if (B) { B.open = true; const f = B.querySelector(".salbusta"); if (f) f.open = true; B.scrollIntoView({ behavior: "smooth", block: "start" }); } else window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {} }, 1500);
@@ -3822,7 +3840,7 @@ function salMeseRaw(m, opt) {
   opt = opt || {};
   const cs = codesOf(m, name), M = SAL.mesi[m.key] || {}, ex = M.extra || {};
   const po = nz(C.pagaOra), p = salPct(C), soglia = nz(C.soglia) || 8;
-  const R = { giorni: 0, ore: 0, nott: 0, dom: 0, fest: 0, buoni: 0, mNott: 0, mDom: 0, mFest: 0, ordH: 0, ordNott: 0, vOrd: 0, strH: 0, strNott: 0, vStr: 0, ind: 0, sostInd: 0, dispOrd: 0, rows: [] };
+  const R = { giorni: 0, ore: 0, nott: 0, dom: 0, fest: 0, buoni: 0, mNott: 0, mDom: 0, mFest: 0, ordH: 0, ordNott: 0, vOrd: 0, strH: 0, strNott: 0, vStr: 0, ind: 0, sostInd: 0, dispOrd: 0, mrH: 0, vMR: 0, rows: [] };
   cs.forEach((c, i) => {
     const dt = new Date(m.year, m.month - 1, i + 1); if (opt.fino && dt > opt.fino) return;
     const X = opt.noExtra ? { piu: 0, dove: "dopo" } : salExtra(ex[i + 1] || {});
@@ -3839,6 +3857,9 @@ function salMeseRaw(m, opt) {
         if (rem > 1e-6 && c.start < orig.start - 1e-6) { const add = Math.min(rem, Math.min(orig.start, c.end) - c.start); if (add > 1e-6) autoIv.push([c.start, c.start + add]); }
         baseH = c.hours - autoIv.reduce((s, v) => s + v[1] - v[0], 0); } }
     const autoH = autoIv.reduce((s, v) => s + v[1] - v[0], 0);
+    // giorno di riposo (R1/R2) trasformato in turno: "mancato riposo", pagato con la sua percentuale invece che come turno del fisso
+    let mrLab = null; if (c && c.kind === "lavoro" && c.mod) { const o0 = origOf(m, name, i); if (o0 && o0.kind === "riposo") mrLab = /2/.test(String(o0.label)) ? "R2" : /1/.test(String(o0.label)) ? "R1" : "R"; }
+    if (mrLab) { baseH = soglia; autoIv = []; }
     const row = { i, dt, c, piu: Math.round((X.piu + autoH) * 100) / 100, dove: X.dove, ord: 0, str: 0, xNott: 0, nott: 0, dom: 0, fest: 0, buono: false };
     // per "maturato a oggi": oggi conta solo fino all'ora attuale (opt.ora), i giorni passati per intero
     const cut = opt.fino && opt.ora != null && dt.toDateString() === opt.fino.toDateString() ? opt.ora : null;
@@ -3846,12 +3867,14 @@ function salMeseRaw(m, opt) {
     if (c && c.kind === "lavoro") {
       R.giorni++; R.lav = (R.lav || 0) + 1; R.ore += cut != null ? Math.max(0, Math.min(c.end, cut) - c.start) : c.hours; R.dispOrd += Math.max(0, soglia - baseH);
       for (let t = c.start; t < c.end - 1e-6; t += 0.25) slot(t, Math.min(0.25, c.end - t), (q, n, su, ho) => {
+        if (mrLab) return; // mancato riposo: pagato sotto a percentuale propria
         if (autoIv.some(v => t >= v[0] - 1e-6 && t < v[1] - 1e-6)) return; // conteggiata sotto come allungo
         const v = q * po * maggOrd(p, n, su, ho); if (n) { row.nott += q; } if (su) row.dom += q; if (ho) row.fest += q;
         if (ho) R.mFest += v; else if (su) R.mDom += v; else R.mNott += v; });
       R.nott += row.nott; R.dom += row.dom; R.fest += row.fest;
       R.ind += nz(C.ind1) + nz(C.ind2); R.sostInd += nz(C.ind1);
       if (c.hours >= nz(SET.buonoOre || 6)) { row.buono = true; R.buoni++; }
+      if (!opt.noExtra && mrLab) { const pcv = (mrLab === "R1" ? nz(C.percMR1) : mrLab === "R2" ? nz(C.percMR2) : 0) || nz(C.percMR), f = pcv ? pcv / 100 : p.strFest; R.mrH += c.hours; R.vMR += c.hours * po * (1 + f); row.mr = c.hours; }
       if (!opt.noExtra && (X.piu > 0 || autoIv.length)) { // ore in più attaccate al turno (dopo la fine o prima dell'inizio) + parte aggiunta da variazioni
         const ivs = autoIv.map(v => [v[0], v[1] - v[0]]); if (X.piu > 0) ivs.push([X.dove === "prima" ? c.start - X.piu : c.end, X.piu]);
         const ordCap = Math.max(0, soglia - baseH); let ordUsed = 0;
@@ -3869,11 +3892,11 @@ function salMeseRaw(m, opt) {
     }
     R.rows.push(row);
   });
-  if (opt.pr) { const q = opt.pr; R.ordH += q.ordH; R.vOrd += q.vOrd; R.ordNott += q.ordNott; R.strH += q.strH; R.vStr += q.vStr; R.strNott += q.strNott; R.dispOrd = q.dispOrd; R.prevRows = q.rows; }
+  if (opt.pr) { const q = opt.pr; R.ordH += q.ordH; R.vOrd += q.vOrd; R.ordNott += q.ordNott; R.strH += q.strH; R.vStr += q.vStr; R.strNott += q.strNott; R.mrH += q.mrH; R.vMR += q.vMR; R.dispOrd = q.dispOrd; R.prevRows = q.rows; }
   const dim = new Date(m.year, m.month, 0).getDate(), frac = opt.fino ? Math.max(0, Math.min(1, (opt.fino < new Date(m.year, m.month - 1, 1) ? 0 : opt.fino >= new Date(m.year, m.month, 0, 23, 59) ? dim : opt.fino.getDate()) / dim)) : 1;
   const voci = (C.voci || []).map(v => { const n = v.tipo === "giorno" ? (R.lav || 0) : v.tipo === "ora" ? R.ore : frac; return { n: v.n || "Voce", val: nz(v.v) * n, tass: v.tass || "normale" }; });
   const magg = R.mNott + R.mDom + R.mFest;
-  const fisso = nz(C.fisso) * frac, lordo = fisso + magg + R.ind + R.vOrd + R.vStr + voci.reduce((a, v) => a + v.val, 0) + nz(M.altreComp) * frac;
+  const fisso = nz(C.fisso) * frac, lordo = fisso + magg + R.ind + R.vOrd + R.vStr + R.vMR + voci.reduce((a, v) => a + v.val, 0) + nz(M.altreComp) * frac;
   const sostBase = magg + R.sostInd + voci.filter(v => v.tass === "sost").reduce((a, v) => a + v.val, 0), esente = voci.filter(v => v.tass === "esente").reduce((a, v) => a + v.val, 0);
   const N = salNet(lordo, sostBase, esente, m.month, M, frac);
   return Object.assign(R, { fisso, magg, voci, lordo, sostBase, esente, netto: N.netto, D: N.D, tratt: N.tratt, buoniVal: R.buoni * nz(C.buonoVal), name, soglia });
@@ -4024,7 +4047,7 @@ function salDet(a, MM) {
   const C = SAL.cfg, row = (l, v, neg) => v ? `<div class="sdr"><span>${l}</span><b>${neg ? "− " : ""}${eur(v)}</b></div>` : "";
   let h = `<div class="sdh">Competenze</div>` + row("Retribuzione" + (C.livello ? " · livello " + esc(C.livello) : ""), a.fisso) + row(`Maggiorazione notturna (${hfx(a.nott)} h)`, a.mNott) + row(`Maggiorazione domenicale (${hfx(a.dom)} h)`, a.mDom) + row(`Maggiorazione festiva (${hfx(a.fest)} h)`, a.mFest)
     + row(esc(C.ind1n || "Indennità") + ` (${a.lav || 0} gg)`, nz(C.ind1) * (a.lav || 0)) + row(esc(C.ind2n || "Altra indennità") + ` (${a.lav || 0} gg)`, nz(C.ind2) * (a.lav || 0))
-    + row(`Allungo / ore ordinarie in più (${hfx(a.ordH)} h${a.prevM ? " · mese prima" : ""})`, a.vOrd) + row(`Straordinario (${hfx(a.strH)} h${a.strNott ? ", " + hfx(a.strNott) + " notturne" : ""}${a.prevM ? " · mese prima" : ""})`, a.vStr)
+    + row(`Allungo / ore ordinarie in più (${hfx(a.ordH)} h${a.prevM ? " · mese prima" : ""})`, a.vOrd) + row(`Straordinario (${hfx(a.strH)} h${a.strNott ? ", " + hfx(a.strNott) + " notturne" : ""}${a.prevM ? " · mese prima" : ""})`, a.vStr) + (a.mrH ? row(`Mancato riposo (${hfx(a.mrH)} h${a.prevM ? " · mese prima" : ""})`, a.vMR) : "")
     + a.voci.map(v => row(esc(v.n), v.val)).join("") + row("Altre competenze", nz(MM.altreComp));
   h += `<div class="sdr tot"><span>Totale lordo</span><b>${eur(a.lordo)}</b></div><div class="sdh">Trattenute</div>`;
   if (a.D) h += row("Contributi INPS", a.D.inps, 1) + row("Fondo pensione", a.D.fondo, 1) + row("Imposta sostitutiva sui turni", a.D.sost, 1) + row("IRPEF (dopo le detrazioni)", a.D.irpef, 1) + row("Addizionali regionale e comunale", a.D.addiz, 1);
