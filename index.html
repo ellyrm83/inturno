@@ -1446,6 +1446,14 @@ function impPanel() {
 }
 // Controllo delle voci a ogni busta importata: le voci che le regole di calcolo non conoscono ancora vengono aggiunte
 // (es. mancato riposo R1/R2: dalla riga della busta ricavo la percentuale). Non sovrascrive quello che hai già impostato.
+// "Oggi ho finito alle…": registra l'orario vero di fine turno come variazione del giorno (allunghi e maturato si aggiornano da soli)
+function salFineHtml(m) {
+  const t = new Date(); if (t.getFullYear() !== m.year || t.getMonth() + 1 !== m.month) return "";
+  const nm = findIn(m, P.name), c = nm && codesOf(m, nm)[t.getDate() - 1]; if (!c || c.kind !== "lavoro") return "";
+  const now = salOra(); if (now < c.start) return "";
+  const v = hhmm(now < c.end ? Math.round(now * 4) / 4 : c.end);
+  return `<div class="row" style="gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap"><span class="muted" style="font-size:13px">⏱ Oggi ho finito alle</span><input type="time" id="salfinet" value="${v}" style="width:110px"><button class="mini" id="salfineok">Registra</button></div>`;
+}
 function salRegoleDaBusta(righe, C) {
   const agg = [], po = nz(C.pagaOra), ign = [];
   const NOTO = /RETRIBUZ|STIPENDIO|PAGA BASE|MINIMO|CONTINGENZA|SCATTI|ANZIANIT|MAGG|STRAORD|IND(\.|ENNIT)|NOTT|DOMEN|FESTIV|BUON|TICKET|L\.?\s?104|PERM|MALATT|ASSENZ|FERIE|ROL\b|CONGEDO|IRPEF|ADDIZ|INPS|IVS|CONTRIB|IMP\.?\s?SOST|FONDO|PREVAER|COMETA|\b207\b|CUNEO|BONUS|TRATT|ARROTOND|TFR|MANC.*RIP|RIP.*(MANC|LAVOR)/i;
@@ -3821,10 +3829,16 @@ function salExtra(e) { return { piu: nz(e.piu) || (nz(e.str) + nz(e.all)), dove:
 // Data di pagamento della busta di un mese: il giorno indicato (di solito il 10) del mese successivo.
 // Se cade di sabato o domenica si paga il giorno prima (il 9); se è un festivo infrasettimanale, il giorno lavorativo prima.
 function salPagaData(m, C) {
-  const bi = m.month - 1 + (C.posticipo ? 1 : 0), dd = Math.max(1, Math.min(31, Math.round(nz(C.giornoPaga)) || 10)), last = new Date(m.year, bi + 2, 0).getDate();
+  const bi = m.month - 1, dd = Math.max(1, Math.min(31, Math.round(nz(C.giornoPaga)) || 10)), last = new Date(m.year, bi + 2, 0).getDate();
   const d0 = new Date(m.year, bi + 1, Math.min(dd, last)), d = new Date(d0);
   if (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1); else while (festivo(d) || d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
   d.moved = d.getTime() !== d0.getTime(); d.orig = d0.getDate(); return d;
+}
+// Prossimo accredito: tra le buste dei mesi caricati, quella con la data di pagamento più vicina da oggi in poi.
+function salProssimoAccredito(mesi, C, oggi) {
+  const t0 = new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate()); let best = null;
+  for (const m of mesi || []) { const d = salPagaData(m, C); if (d < t0) continue; if (!best || d < best.d) best = { m, d, giorni: Math.round((d - t0) / 86400000) }; }
+  return best;
 }
 function salPrevM(m) { const py = m.month === 1 ? m.year - 1 : m.year, pmn = m.month === 1 ? 12 : m.month - 1; return salMonths().find(x => x.year === py && x.month === pmn) || null; }
 function salMese(m, opt) {
@@ -3832,7 +3846,7 @@ function salMese(m, opt) {
   const pr = !opt.noExtra && pm ? salMeseRaw(pm, {}) : null; // extra del mese precedente (tutto il mese è già in gran parte maturato)
   const own = !opt.noExtra ? salMeseRaw(m, opt) : null;       // extra di questo mese: finiscono nella busta del mese dopo
   const R = salMeseRaw(m, Object.assign({}, opt, { noExtra: true, pr }));
-  if (R) { R.prevM = pm; if (!opt.noExtra && !pr) R.dispOrd = 0; if (own) R.own = { ore: own.ore, nott: own.nott + own.ordNott + own.strNott, ordH: own.ordH, strH: own.strH }; }
+  if (R) { R.prevM = pm; if (!opt.noExtra && !pr) { R.dispOrd = 0; R.dispFut = 0; } if (own) R.own = { ore: own.ore, nott: own.nott + own.ordNott + own.strNott, ordH: own.ordH, strH: own.strH }; }
   return R;
 }
 function salMeseRaw(m, opt) {
@@ -3840,7 +3854,8 @@ function salMeseRaw(m, opt) {
   opt = opt || {};
   const cs = codesOf(m, name), M = SAL.mesi[m.key] || {}, ex = M.extra || {};
   const po = nz(C.pagaOra), p = salPct(C), soglia = nz(C.soglia) || 8;
-  const R = { giorni: 0, ore: 0, nott: 0, dom: 0, fest: 0, buoni: 0, mNott: 0, mDom: 0, mFest: 0, ordH: 0, ordNott: 0, vOrd: 0, strH: 0, strNott: 0, vStr: 0, ind: 0, sostInd: 0, dispOrd: 0, mrH: 0, vMR: 0, rows: [] };
+  const R = { giorni: 0, ore: 0, nott: 0, dom: 0, fest: 0, buoni: 0, mNott: 0, mDom: 0, mFest: 0, ordH: 0, ordNott: 0, vOrd: 0, strH: 0, strNott: 0, vStr: 0, ind: 0, sostInd: 0, dispOrd: 0, mrH: 0, vMR: 0, dispFut: 0, rows: [] };
+  const todayMid = new Date(); todayMid.setHours(0, 0, 0, 0);
   cs.forEach((c, i) => {
     const dt = new Date(m.year, m.month - 1, i + 1); if (opt.fino && dt > opt.fino) return;
     const X = opt.noExtra ? { piu: 0, dove: "dopo" } : salExtra(ex[i + 1] || {});
@@ -3890,9 +3905,10 @@ function salMeseRaw(m, opt) {
     } else if (X.piu > 0) { // ore in un giorno di riposo: tutto straordinario
       const su = dt.getDay() === 0, ho = festivo(dt), pc = su || ho ? p.strFest : p.str; row.str = X.piu; R.strH += X.piu; R.vStr += X.piu * po * (1 + pc);
     }
+    if (c && c.kind === "lavoro" && !mrLab && dt >= todayMid) R.dispFut += Math.max(0, soglia - baseH - row.ord); // allungo ordinario ancora possibile (giorni da oggi)
     R.rows.push(row);
   });
-  if (opt.pr) { const q = opt.pr; R.ordH += q.ordH; R.vOrd += q.vOrd; R.ordNott += q.ordNott; R.strH += q.strH; R.vStr += q.vStr; R.strNott += q.strNott; R.mrH += q.mrH; R.vMR += q.vMR; R.dispOrd = q.dispOrd; R.prevRows = q.rows; }
+  if (opt.pr) { const q = opt.pr; R.ordH += q.ordH; R.vOrd += q.vOrd; R.ordNott += q.ordNott; R.strH += q.strH; R.vStr += q.vStr; R.strNott += q.strNott; R.mrH += q.mrH; R.vMR += q.vMR; R.dispOrd = q.dispOrd; R.dispFut = q.dispFut; R.prevRows = q.rows; }
   const dim = new Date(m.year, m.month, 0).getDate(), frac = opt.fino ? Math.max(0, Math.min(1, (opt.fino < new Date(m.year, m.month - 1, 1) ? 0 : opt.fino >= new Date(m.year, m.month, 0, 23, 59) ? dim : opt.fino.getDate()) / dim)) : 1;
   const voci = (C.voci || []).map(v => { const n = v.tipo === "giorno" ? (R.lav || 0) : v.tipo === "ora" ? R.ore : frac; return { n: v.n || "Voce", val: nz(v.v) * n, tass: v.tass || "normale" }; });
   const magg = R.mNott + R.mDom + R.mFest;
@@ -3917,7 +3933,7 @@ function salPiano(a, manca, m) {
   const C = SAL.cfg, po = nz(C.pagaOra), p = salPct(C); if (!(po > 0) || manca <= 0) return [];
   const M = SAL.mesi[m.key] || {}, base = salNet(a.lordo, a.sostBase, a.esente, m.month, M).netto;
   const net1 = g => salNet(a.lordo + g, a.sostBase, a.esente, m.month, M).netto - base;
-  const T = [["Allungo (ore ordinarie, fino a " + hfx(a.soglia) + " h di turno)", po * (1 + p.all), Math.max(0, a.dispOrd - a.ordH)], ["Allungo in fascia notturna", po * (1 + p.all + p.nott), null], ["Straordinario diurno (oltre le " + hfx(a.soglia) + " h)", po * (1 + p.str), null], ["Straordinario notturno", po * (1 + p.strNott), null], ["Straordinario domenicale / festivo", po * (1 + p.strFest), null], ["Mancato R1 (turno in più nel riposo R1)", po * (1 + (nz(C.percMR1) || nz(C.percMR) ? (nz(C.percMR1) || nz(C.percMR)) / 100 : p.strFest)), null], ["Mancato R2 (turno in più nel riposo R2)", po * (1 + (nz(C.percMR2) || nz(C.percMR) ? (nz(C.percMR2) || nz(C.percMR)) / 100 : p.strFest)), null]];
+  const T = [["Allungo (ore ordinarie, fino a " + hfx(a.soglia) + " h di turno)", po * (1 + p.all), Math.max(0, a.dispFut)], ["Allungo in fascia notturna", po * (1 + p.all + p.nott), null], ["Straordinario diurno (oltre le " + hfx(a.soglia) + " h)", po * (1 + p.str), null], ["Straordinario notturno", po * (1 + p.strNott), null], ["Straordinario domenicale / festivo", po * (1 + p.strFest), null], ["Mancato R1 (turno in più nel riposo R1)", po * (1 + (nz(C.percMR1) || nz(C.percMR) ? (nz(C.percMR1) || nz(C.percMR)) / 100 : p.strFest)), null], ["Mancato R2 (turno in più nel riposo R2)", po * (1 + (nz(C.percMR2) || nz(C.percMR) ? (nz(C.percMR2) || nz(C.percMR)) / 100 : p.strFest)), null]];
   const seen = new Set();
   return T.map(([l, g, disp]) => { const n1 = net1(g); if (!(n1 > 0) || seen.has(l)) return null; seen.add(l); return { l, h: Math.ceil(manca / n1 * 2) / 2, perH: n1, disp }; }).filter(Boolean);
 }
@@ -3949,17 +3965,21 @@ function renderSal() {
     const idx = ms.indexOf(m), MM = SAL.mesi[m.key] = SAL.mesi[m.key] || {};
     const today = new Date(); today.setHours(23, 59, 59, 0);
     const prev = salMese(m, { noExtra: true }), all = salMese(m), fino = salMese(m, { fino: today, ora: salOra() });
-    const busta = C.posticipo ? MESI_L[m.month % 12] + (m.month === 12 ? " " + (m.year + 1) : "") : MESI_L[m.month - 1];
+    const busta = MESI_L[m.month - 1];
     // lo stipendio di una busta si paga il giorno indicato (di solito il 10) del mese successivo
     const pagaD = salPagaData(m, C);
     const pagaTxt = `💶 Pagamento il ${pagaD.getDate()} ${MESI_L[pagaD.getMonth()]} ${pagaD.getFullYear()}${pagaD.moved ? ` (anticipato: il ${pagaD.orig} cade di sabato, domenica o festivo)` : ""}`;
     const ob = nz(MM.obiettivo), tgt = ob || all.netto, pct = v => Math.max(0, Math.min(100, tgt ? v / Math.max(tgt, all.netto) * 100 : 0));
     const obTxt = salObBlock(all, m) + salAliqBlock(m);
-    h += `<div class="salnav"><button class="mini" id="salp" ${idx <= 0 ? "disabled" : ""}>◀</button><b>${esc(MESI_L[m.month - 1])} ${m.year}</b><button class="mini" id="saln" ${idx >= ms.length - 1 ? "disabled" : ""}>▶</button></div>
+    const nx = salProssimoAccredito(ms, C, new Date()), nxNet = nx ? salMese(nx.m).netto : 0;
+    const nxTxt = nx ? `<div class="salbig" style="margin-bottom:8px"><span class="muted" style="font-size:13px">💶 Prossimo accredito</span><div><b>${nx.d.getDate()} ${esc(MESI_L[nx.d.getMonth()])}</b> · ${nx.giorni === 0 ? "oggi" : nx.giorni === 1 ? "domani" : "tra " + nx.giorni + " giorni"} · busta di ${esc(MESI_L[nx.m.month - 1])} · netto stimato <b>${eur0(nxNet)}</b></div></div>` : "";
+    const warnPrev = all.prevM ? "" : `<p class="muted" style="font-size:13px;margin:0 0 8px;padding:8px;border:1px solid var(--line,#8886);border-radius:8px">⚠️ Manca il calendario di ${esc(MESI_L[(m.month + 10) % 12])}: allunghi, straordinari e mancati riposo della busta di ${esc(busta)} risultano a zero. Caricalo dalla pagina Carica.</p>`;
+    h += nxTxt + warnPrev + `<div class="salnav"><button class="mini" id="salp" ${idx <= 0 ? "disabled" : ""}>◀</button><b>${esc(MESI_L[m.month - 1])} ${m.year}</b><button class="mini" id="saln" ${idx >= ms.length - 1 ? "disabled" : ""}>▶</button></div>
       <div class="salbig"><span class="muted">Busta di ${esc(busta)} · netto stimato</span><div class="muted" style="font-size:13px">${pagaTxt}</div><div class="salnum" id="salnet">${eur0(all.netto)}</div>
         <div class="salbar" id="salbar">${salBar(all, fino, ob)}</div>
         <div class="salkpi"><span><b id="salk1">${eur0(prev.netto)}</b><br>previsto dalla griglia</span><span><b id="salk2">${eur0(fino.netto)}</b><br>maturato a oggi</span><span><b id="salk3">${eur0(all.netto)}</b><br>con gli extra</span></div>
         <div class="muted" style="font-size:13px;margin-top:6px" id="salwork">${salLavTxt(fino)}</div>
+        ${salFineHtml(m)}
         <div class="muted" style="font-size:13px;margin-top:6px" id="salbuo">🍽️ ${all.buoni} buoni pasto${nz(C.buonoVal) ? " = " + eur(all.buoniVal) : ""} · ${all.giorni} giorni lavorativi${all.assenze ? ` (di cui ${all.assenze} di malattia, ferie o permesso)` : ""} · ${hfx(all.ore)} h · 🌙 ${hfx(all.nott + all.ordNott + all.strNott)} h notturne${all.ordH ? " · ➕ " + hfx(all.ordH) + " h allungo" : ""}${all.strH ? " · ⏱ " + hfx(all.strH) + " h straordinario" : ""}</div>
         <div id="salobt">${obTxt}</div>
         <div class="fgrid" style="margin-top:8px"><div><label>🎯 Obiettivo netto del mese</label><input id="salob" inputmode="decimal" value="${esc(MM.obiettivo || "")}" placeholder="es. 1900"></div><div><label>Netto vero della busta</label><input id="salreal" inputmode="decimal" value="${esc(MM.nettoReale || "")}" placeholder="a fine mese"></div></div>
@@ -3967,7 +3987,7 @@ function renderSal() {
       </div>
       <div class="sec">${all.prevM ? "Allunghi e straordinari di " + esc(MESI_L[all.prevM.month - 1]) : "Allunghi e straordinari"} · tocca un giorno per aggiungere ore in più</div><p class="muted" style="font-size:12px;margin:0 0 6px">Nella busta di ${esc(MESI_L[m.month - 1])} entrano le retribuzioni di ${esc(MESI_L[m.month - 1])} e gli allunghi e straordinari del mese prima${all.prevM ? "" : " (carica anche il mese precedente per segnarli)"}. Fino a ${hfx(all.soglia)} h di turno le ore in più sono ordinarie (allungo), oltre sono straordinario. Notturno, domenica e festivi li calcolo dall'orario.</p><div class="salrows">${(all.prevRows || []).filter(r => (r.c && r.c.kind === "lavoro") || r.piu).map(r => {
         const wd = r.dt.toLocaleDateString("it-IT", { weekday: "short", day: "numeric" }), e = ((SAL.mesi[(all.prevM || {}).key] || {}).extra || {})[r.i + 1] || {};
-        return `<details class="salrow" ${r.piu ? "open" : ""}><summary><span class="sd ${r.dt.getDay() === 0 || festivo(r.dt) ? "red" : ""}">${esc(wd)}</span><span>${r.c && r.c.kind === "lavoro" ? hhmm(r.c.start) + "–" + hhmm(r.c.end) : "riposo"}</span><span class="muted">${r.nott ? "🌙" + hfx(r.nott) + " " : ""}${r.buono ? "🍽️" : ""}${r.piu ? " +" + hfx(r.piu) + " h" : ""}</span></summary>
+        return `<details class="salrow" ${r.piu ? "open" : ""}><summary><span class="sd ${r.dt.getDay() === 0 || festivo(r.dt) ? "red" : ""}">${esc(wd)}</span><span>${r.c && r.c.kind === "lavoro" ? hhmm(r.c.start) + "–" + hhmm(r.c.end) : "riposo"}</span><span class="muted">${r.nott ? "🌙" + hfx(r.nott) + " " : ""}${r.buono ? "🍽️" : ""}${r.piu ? " +" + hfx(r.piu) + " h" : ""}${r.mr ? " 🔁 mancato riposo " + hfx(r.mr) + " h" : ""}</span></summary>
           ${salDayHtml(e, r, "sx" + (r.i + 1))}</details>`; }).join("")}</div>
       <details class="more"><summary>📄 Dettaglio delle voci</summary><div class="saldet">${salDet(all, MM)}</div>
         <div class="fgrid"><div><label>Altre competenze del mese</label><input data-mm="altreComp" inputmode="decimal" value="${esc(MM.altreComp || "")}" placeholder="0"></div><div><label>Altre trattenute del mese</label><input data-mm="altreTratt" inputmode="decimal" value="${esc(MM.altreTratt || "")}" placeholder="0"></div></div></details>`;
@@ -3984,6 +4004,8 @@ function renderSal() {
   const live = SALLIVE = !m ? null : () => { const a = salMese(m), ob2 = nz((SAL.mesi[m.key] || {}).obiettivo); f = salMese(m, { fino: (() => { const t = new Date(); t.setHours(23, 59, 59, 0); return t; })(), ora: salOra() }); $("salwork").innerHTML = salLavTxt(f); $("salobt").innerHTML = salObBlock(a, m) + salAliqBlock(m); $("salbar").innerHTML = salBar(a, f, ob2); salTabLabel(); $("salnet").textContent = eur0(a.netto); $("salk1").textContent = eur0(salMese(m, { noExtra: true }).netto); $("salk2").textContent = eur0(f.netto); $("salk3").textContent = eur0(a.netto);
     $("salbuo").textContent = `🍽️ ${a.buoni} buoni pasto${nz(SAL.cfg.buonoVal) ? " = " + eur(a.buoniVal) : ""} · ${a.giorni} giorni lavorativi${a.assenze ? ` (di cui ${a.assenze} di malattia, ferie o permesso)` : ""} · ${hfx(a.ore)} h · 🌙 ${hfx(a.nott + a.ordNott + a.strNott)} h notturne${a.ordH ? " · ➕ " + hfx(a.ordH) + " h allungo" : ""}${a.strH ? " · ⏱ " + hfx(a.strH) + " h straordinario" : ""}`; };
   out.querySelectorAll("input").forEach(i => { i.addEventListener("focus", () => SALT = true); i.addEventListener("blur", () => { SALT = false; }); });
+  if ($("salfineok")) $("salfineok").onclick = async () => { const v = $("salfinet").value; if (!v) return; const t = new Date(), nm = findIn(m, P.name), i = t.getDate() - 1, c0 = nm && codesOf(m, nm)[i]; if (!c0 || c0.kind !== "lavoro") return;
+    OV[ovKey(m, nm, i)] = { tipo: "variazione", inizio: hhmm(c0.start), fine: v, nota: "Fine turno reale" }; await saveOv(); renderAll(); };
   out.querySelectorAll("[data-xd]").forEach(i => { const ev = i.tagName === "SELECT" ? "onchange" : "oninput"; i[ev] = () => { const day = +i.dataset.xd, em = salPrevM(m); if (!em) return; const MM = SAL.mesi[em.key] = SAL.mesi[em.key] || {}; MM.extra = MM.extra || {}; const d = MM.extra[day] = MM.extra[day] || {}; delete d.str; delete d.all; d[i.dataset.f] = i.value.trim(); salRif(d, em, day); salSave(); live(); const a = salMese(m), row = (a.prevRows || []).find(x => x.i === day - 1), el = out.querySelector(`[data-xr="${day}"]`); if (el && row) el.innerHTML = salSplit(row); }; });
   out.querySelectorAll("[data-mm]").forEach(i => i.oninput = () => { SAL.mesi[m.key][i.dataset.mm] = i.value.trim(); salSave(); live(); });
   if ($("salob")) { $("salob").oninput = () => { SAL.mesi[m.key].obiettivo = $("salob").value.trim(); salSave(); live(); }; $("salreal").onchange = () => { SAL.mesi[m.key].nettoReale = $("salreal").value.trim(); salSave(); renderSal(); }; }
@@ -4002,7 +4024,7 @@ function salObBlock(a, m) {
   if (!pl.length) return `<div class="salko"><div class="salcd"><span>Mancano</span><b>${eur0(manca)}</b><span>netti a ${eur0(ob)}</span></div><p class="muted" style="font-size:12px">Inserisci la paga oraria per vedere quante ore servono.</p></div>`;
   SAL.__mixKey = m.key; const mix = salMix(m, pl, manca), M = SAL.mesi[m.key].mix, tot = mix.reduce((s, x) => s + (x.on ? x.h * x.perH : 0), 0), ok = tot >= manca - 0.5;
   return `<div class="salko"><div class="salcd"><span>Mancano</span><b>${eur0(manca)}</b><span>netti a ${eur0(ob)}</span></div>
-    <p class="muted" style="font-size:12px;margin:6px 0">Spunta come vuoi arrivarci. Le ore si dividono tra le voci spuntate; usa − e + per spostarle da una voce all'altra, le altre si adattano.</p>
+    <p class="muted" style="font-size:12px;margin:6px 0">${a.prevM ? "Ore da fare nei giorni di " + esc(MESI_L[a.prevM.month - 1]) + " (quelli ancora da lavorare) per la busta di " + esc(MESI_L[m.month - 1]) + ". " : ""}Spunta come vuoi arrivarci. Le ore si dividono tra le voci spuntate; usa − e + per spostarle da una voce all'altra, le altre si adattano.</p>
     <div class="mxl">${mix.map(x => `<div class="mxr ${x.on ? "" : "off"}"><label class="mxc"><input type="checkbox" data-mxon="${esc(x.k)}" ${x.on ? "checked" : ""}><span>${esc(x.l)}<br><span class="muted">≈ ${eur(x.perH)} netti l'ora${x.disp != null ? ` · disponibili ${hfx(x.disp)} h` : ""}</span></span></label>
       ${x.on ? `<div class="mxh"><button class="mini" data-mxd="${esc(x.k)}" data-v="-0.5">−</button><b class="${(M[x.k] || {}).lock ? "lk" : ""}">${hfx(x.h)} h</b><button class="mini" data-mxd="${esc(x.k)}" data-v="0.5">+</button></div>` : ""}</div>`).join("")}</div>
     <div class="mxt ${ok ? "ok" : ""}">${ok ? "✓" : "…"} Con queste ore: <b>+${eur0(tot)}</b> → netto previsto <b>${eur0(a.netto + tot)}</b>${ok ? "" : ` · mancano ancora ${eur0(manca - tot)}`}</div>
@@ -4069,7 +4091,6 @@ function salCfgHtml() {
       : `<div class="sec">Tasse e contributi</div><div class="fgrid">${f("inps", "Contributi INPS %", "9,19")}${f("sost", "Imposta sostitutiva turni %", "15")}${f("fondoBase", "Fondo pensione: base €", "")}${f("fondoPerc", "Fondo pensione %", "")}${f("detr", "Detrazioni IRPEF mensili €", "")}${f("addiz", "Addizionali mensili €", "")}${f("l207", "Indennità L.207/2024 %", "")}</div>`}
     <div class="sec">Trattenute personali</div>${(C.tratt || []).map((t, k) => `<div class="salvr t"><input data-tn="${k}" value="${esc(t.n || "")}" placeholder="es. Cessione del quinto"><input data-tv="${k}" inputmode="decimal" value="${esc(t.v || "")}" placeholder="${t.tipo === "perc" ? "%" : "€"}"><select data-tt="${k}"><option value="fisso" ${t.tipo !== "perc" ? "selected" : ""}>€ al mese</option><option value="perc" ${t.tipo === "perc" ? "selected" : ""}>% del lordo</option></select><button class="mini" data-tx="${k}">✕</button></div>`).join("")}
     <div class="stbtn" style="flex-wrap:wrap">${["Cessione del quinto", "Sindacato", "Parcheggio", "Mensa", "Prestito"].map(n => `<button class="mini" data-tpre="${n}">+ ${n}</button>`).join("")}<button class="mini" data-tpre="">+ Altra</button></div>
-    <label class="row" style="gap:8px;margin-top:8px"><input type="checkbox" id="salpost" ${C.posticipo ? "checked" : ""}> <span>Le maggiorazioni arrivano nella busta del mese dopo</span></label>
     <p class="muted" style="font-size:12px">Fascia notturna e ore minime per il buono pasto si cambiano in ⚙️ Impostazioni (ora: ${esc(SET.nDa || "20:00")}–${esc(SET.nA || "08:00")}, buono da ${esc(String(SET.buonoOre || 6))} h).</p>`;
 }
 function salCfgBind(out) {
@@ -4087,7 +4108,6 @@ function salCfgBind(out) {
   out.querySelectorAll("[data-tt]").forEach(i => i.onchange = () => { C.tratt[+i.dataset.tt].tipo = i.value; re(); });
   out.querySelectorAll("[data-tx]").forEach(b => b.onclick = () => { C.tratt.splice(+b.dataset.tx, 1); re(); });
   out.querySelectorAll("[data-tpre]").forEach(b => b.onclick = () => { C.tratt = C.tratt || []; C.tratt.push({ n: b.dataset.tpre, v: "", tipo: "fisso" }); re(); });
-  $("salpost").onchange = e => { C.posticipo = e.target.checked; re(); };
   document.querySelectorAll("[data-bdel]").forEach(b => b.onclick = () => { if (SAL.buste) { delete SAL.buste[b.dataset.bdel]; salSave(); renderSal(); } });
   if ($("salgocar")) $("salgocar").onclick = () => { try { showTab("car"); renderCar(); } catch (e) {} };
   if ($("salpdf")) $("salpdf").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) salImport(f); };

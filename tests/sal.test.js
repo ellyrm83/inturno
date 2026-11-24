@@ -99,3 +99,21 @@ test("busta importata: le voci nuove (mancato riposo) entrano nelle regole, senz
   r = api.salRegoleDaBusta([{ n: "MANC. RIPOSO R2", base: "15,00", piu: "90,00" }], C); // senza %: ricavata da 15 € sull'ora a 10 €/h => +50%
   assert.equal(C.percMR2, "50");
 });
+
+test("prossimo accredito: la busta con la data di pagamento più vicina da oggi in poi", () => {
+  const api = nuovo(), nov = mese(2026, 11, {}), dic = mese(2026, 12, {}), ott = mese(2026, 10, {});
+  const mesi = [ott, nov, dic], su = (anno, mm, gg) => api.salProssimoAccredito(mesi, CFG, new Date(anno, mm - 1, gg));
+  let r = su(2026, 11, 24); assert.equal(r.m.month, 11); assert.equal(r.d.getDate(), 10); assert.equal(r.d.getMonth() + 1, 12); assert.equal(r.giorni, 16); // busta di novembre, il 10 dicembre
+  r = su(2026, 12, 10); assert.equal(r.m.month, 11); assert.equal(r.giorni, 0); // il giorno stesso conta ancora "oggi"
+  r = su(2026, 12, 11); assert.equal(r.m.month, 12); assert.equal(r.d.getDate(), 9); // busta di dicembre: il 10 gennaio 2027 è domenica -> sabato 9
+  assert.equal(su(2027, 1, 10), null); // dopo l'ultima busta caricata non c'è altro
+});
+
+test("ore di allungo ancora disponibili: contano solo i giorni da oggi in poi, al netto di quelle già segnate", () => {
+  const api = nuovo(), t = { 5: "@10:00-16:00", 6: "@10:00-16:00" }, mar = mese(2099, 3, t), apr = mese(2099, 4, {}); aggiungi(api, mar, apr);
+  api.SAL.mesi["2099-03"].extra = { 5: { piu: "1", dove: "dopo" } }; // giorno 5: 6h + 1h segnata => restano 1h; giorno 6: 2h
+  vicino(api.salMese(apr).dispFut, 3, "mese tutto nel futuro: (8-6-1) + (8-6)");
+  const pass = mese(2000, 3, t), pass2 = mese(2000, 4, {}); const api2 = nuovo(); aggiungi(api2, pass, pass2);
+  vicino(api2.salMese(pass2).dispFut, 0, "mese passato: nessuna ora disponibile");
+  vicino(nuovo().salMese(mese(2099, 5, {}), { noExtra: true }).dispFut, 0, "senza mese prima non c'è nulla da pianificare");
+});
