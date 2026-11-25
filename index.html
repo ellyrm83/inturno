@@ -298,6 +298,7 @@ body[data-tab=home] .topbar{display:none}
 
     <div class="topbar"><button id="tbhome">‹ Home</button><b id="tbtitle"></b></div>
   <section id="t-home"><h1 style="font-size:24px;font-weight:800;color:var(--acc);margin:6px 2px 10px;letter-spacing:-.3px">InTurno</h1><div id="home-oggi"></div><div class="qk"><button class="btn" id="qkfoto">📷 Statino da foto</button><button class="btn ghost" id="qkman">✍️ A mano</button><button class="btn ghost" id="qkwho">🗺️ Chi c'è adesso</button></div><div class="tiles" id="tiles"></div><div id="home-prof"><div class="card" id="prof"></div></div></section>
+  <section id="t-pan" class="hidden"></section>
   <section id="t-inv" class="hidden"><div class="card hidden" id="admin"></div></section>
 
   <section id="t-car" class="card hidden"><div id="car"></div></section>
@@ -1020,6 +1021,7 @@ function setMode(m, keepTab) {
 }
 document.querySelectorAll(".modesw [data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
 function showTab(t) {
+  try { const xp = $("xpanel"), pn = $("t-pan"); if (xp && pn) { if (t === "pan") pn.appendChild(xp); else if (xp.parentElement === pn && $("status")) $("status").after(xp); } } catch (e) {}
   if (t === "inv" && !window.__isOwner) t = "home";
   try { if (lkNeeded(t)) { lkAsk(t); return; } } catch (e) {}
   if (t === "stats") setTimeout(renderStat, 0);
@@ -1029,7 +1031,7 @@ function showTab(t) {
   if (document.body.dataset.tab !== t) setTimeout(() => window.scrollTo({ top: 0 }), 0);
   document.body.dataset.tab = t; { const tb = document.querySelector(`.tab[data-t="${t}"]`); if (tb && tb.dataset.grp && !document.body.classList.contains("m-" + tb.dataset.grp)) setMode(tb.dataset.grp, true); }
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t)); { const u = document.querySelector('.tab[data-t="usc"]'); if (u) u.classList.toggle("on", ["ag", "cmp", "sim", "imp"].includes(t)); }
-  ["ag", "me", "cmp", "sim", "st", "cc", "imp", "sal", "car", "stats", "inv"].forEach(k => { const el = $("t-" + k); if (el) el.classList.toggle("hidden", k !== t); });
+  ["ag", "me", "cmp", "sim", "st", "cc", "imp", "sal", "car", "stats", "inv", "pan"].forEach(k => { const el = $("t-" + k); if (el) el.classList.toggle("hidden", k !== t); });
   try { const up = $("upcard"); if (up) up.classList.toggle("hidden", !["me", "car"].includes(t)); const tt = { home: "", me: "Turni", st: "Statini", sal: "Stipendio", ag: "Uscite · Agenda", cmp: "Uscite · Confronta", sim: "Uscite · Incroci", imp: "Uscite · Impegni", cc: "Gruppi", car: "Carica", stats: "Statistiche", inv: "Inviti e persone" }; const tl = $("tbtitle"); if (tl) tl.textContent = tt[t] || ""; if (t === "home") { homeTiles(); oggiRender(); } } catch (e) {}
 }
 function homeTiles() {
@@ -1039,9 +1041,10 @@ function homeTiles() {
   const box = $("tiles"); if (!box) return;
   box.innerHTML = L.filter(x => !["me", "st", "sal", "usc", "cc", "car", "stats"].includes(x[0]) || vis(x[0])).map(x => `<button class="tile" data-go="${x[0]}" style="--t:${x[4]}"><span class="ic">${x[1]}</span><span><b>${x[2]}</b><span class="sb">${x[3]}</span></span></button>`).join("");
   box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const k = b.dataset.go;
-    if (k === "inv") return showTab("inv"); if (k === "ntf") return ntfPanel().then(() => {}, () => {}); if (k === "fb") return fbPanel(); if (k === "set") return openSettings();
+    if (k === "inv") return showTab("inv"); if (k === "ntf" || k === "fb" || k === "set") { showTab("pan"); $("tbtitle").textContent = k === "ntf" ? "Notifiche" : k === "fb" ? (window.__isOwner ? "Pareri" : "Dì la tua") : "Impostazioni"; if (k === "ntf") ntfPanel(); else if (k === "fb") fbPanel(); else openSettings(); return; }
     const tb = document.querySelector(`.tab[data-t="${k}"]`); if (tb) tb.click(); else showTab(k); });
 }
+try { const xo = $("xpanel"); if (xo) new MutationObserver(() => { if (document.body.dataset.tab === "pan" && !xo.children.length && !xo.textContent.trim()) showTab("home"); }).observe(xo, { childList: true }); } catch (e) {}
 document.addEventListener("click", ev => { const c = ev.target.closest && ev.target.closest("#tbhome,#qkfoto,#qkman,#qkwho"); if (!c) return;
   if (c.id === "tbhome") return showTab("home");
   document.querySelector('.tab[data-t="st"]').click();
