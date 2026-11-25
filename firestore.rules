@@ -96,6 +96,17 @@ service cloud.firestore {
       allow read, write: if signed() && me() == uid;
     }
 
+    // pareri di chi prova l'app: li scrive chi è approvato (solo testo, voto e nome facoltativo), li legge e gestisce solo la proprietaria
+    match /feedback/{id} {
+      allow create: if approved()
+        && request.resource.data.keys().hasOnly(['testo', 'voto', 'nome', 'creato', 'letto', 'v'])
+        && request.resource.data.testo is string && request.resource.data.testo.size() >= 3 && request.resource.data.testo.size() <= 1000
+        && request.resource.data.voto is int && request.resource.data.voto >= 0 && request.resource.data.voto <= 5
+        && request.resource.data.get('nome', '') is string && request.resource.data.get('nome', '').size() <= 60
+        && request.resource.data.creato is number && request.resource.data.letto == false;
+      allow read, update, delete: if isOwner();
+    }
+
     // proposte ("ti va un caffè?"): le vedono chi le invia e i destinatari; rispondono solo cambiando la propria risposta
     match /proposte/{id} {
       allow read: if approved() && (resource.data.da == me() || me() in resource.data.a);

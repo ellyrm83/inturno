@@ -1449,6 +1449,30 @@ function notifOwner() {
       else if (/invito/i.test(d.stato || "")) ntfSend("🎟️ Codice usato", `${d.nome || "Qualcuno"} è entrata con un tuo codice invito.`, "req-" + id); }); }, () => {});
 }
 setInterval(() => { try { notifOwner(); } catch {} }, 4000);
+
+// ---------- Pareri di chi prova l'app ----------
+// Chi prova l'app scrive un parere (e un voto); lo legge solo la proprietaria. Nessun dato di turni o stipendio, il nome solo se chi scrive lo vuole.
+async function fbPanel() {
+  const box = $("xpanel"); if (!box) return; let voto = 0;
+  const chiudi = () => { box.innerHTML = ""; };
+  if (window.__isOwner) {
+    box.innerHTML = `<div class="ovbox"><b>📬 Pareri ricevuti</b><div id="fblist" class="muted">Carico…</div><div class="stbtn" style="margin-top:8px"><button class="btn ghost" id="fbx">Chiudi</button></div></div>`; $("fbx").onclick = chiudi;
+    try { const s = await ST.db.collection("feedback").orderBy("creato", "desc").limit(100).get();
+      $("fblist").innerHTML = s.empty ? "Nessun parere ancora." : s.docs.map(d => { const x = d.data(), nuovo = !x.letto; return `<div class="card" style="margin:6px 0;padding:10px;${nuovo ? "border-color:var(--acc)" : ""}"><div class="muted" style="font-size:12px">${nuovo ? "🆕 " : ""}${x.voto ? "⭐".repeat(x.voto) + " · " : ""}${esc(x.nome || "anonimo")} · ${new Date(x.creato).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}</div><div style="margin:4px 0;white-space:pre-wrap">${esc(x.testo || "")}</div><button class="mini" data-fbr="${d.id}">${nuovo ? "Segna letto" : "Elimina"}</button></div>`; }).join("");
+      $("fblist").onclick = async e => { const b = e.target.closest("[data-fbr]"); if (!b) return; const r = ST.db.collection("feedback").doc(b.dataset.fbr); try { if (/letto/i.test(b.textContent)) await r.update({ letto: true }); else await r.delete(); fbPanel(); } catch (er) { b.textContent = "Non riuscito"; } };
+    } catch (e) { $("fblist").textContent = "Non riesco a leggerli: " + (e && e.message || e); }
+    return; }
+  box.innerHTML = `<div class="ovbox"><b>💬 Dì la tua</b><p class="muted" style="font-size:13px">Cosa funziona, cosa no, cosa ti manca? Arriva solo il testo che scrivi: nessun dato dei tuoi turni o dello stipendio.</p>
+    <div id="fbst" class="row" style="gap:4px;font-size:26px">${[1, 2, 3, 4, 5].map(n => `<span data-fbs="${n}" style="cursor:pointer;opacity:.35">⭐</span>`).join("")}</div>
+    <textarea id="fbt" rows="4" maxlength="1000" placeholder="Scrivi qui il tuo parere" style="width:100%;margin-top:6px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px"></textarea>
+    <label class="row" style="gap:6px;margin-top:6px"><input type="checkbox" id="fbn"> <span>Firma con il mio nome</span></label>
+    <div class="stbtn" style="margin-top:8px"><button class="btn" id="fbgo">Invia</button><button class="btn ghost" id="fbx">Chiudi</button></div><div id="fbm" class="muted"></div></div>`;
+  $("fbx").onclick = chiudi;
+  $("fbst").onclick = e => { const t = e.target.closest("[data-fbs]"); if (!t) return; voto = +t.dataset.fbs; $("fbst").querySelectorAll("[data-fbs]").forEach(x => { x.style.opacity = +x.dataset.fbs <= voto ? 1 : .35; }); };
+  $("fbgo").onclick = async () => { const testo = $("fbt").value.trim(); if (testo.length < 3) { $("fbm").textContent = "Scrivi qualcosa prima di inviare."; return; }
+    try { await ST.db.collection("feedback").add({ testo, voto, nome: $("fbn").checked ? (P.name || "") : "", creato: Date.now(), letto: false, v: 1 }); box.innerHTML = `<div class="ovbox"><b>Grazie! 🙏</b><p class="muted">Il tuo parere è arrivato.</p><button class="btn ghost" id="fbx">Chiudi</button></div>`; $("fbx").onclick = chiudi; }
+    catch (e) { $("fbm").textContent = "Non sono riuscita a inviarlo: riprova tra poco."; } };
+}
 function ntfBtnLabel() { return typeof Notification === "undefined" ? "🔕 Notifiche" : ntfOn() ? "🔔 Notifiche attive" : "🔕 Attiva notifiche"; }
 async function ntfPanel() {
   const box = $("xpanel"); if (!box) return;
@@ -4686,9 +4710,9 @@ function renderProf() {
     const nm = S.months.length ? S.months.filter(m => findIn(m, P.name)).length : 0;
     box.innerHTML = `<div class="prof"><div class="av">${esc(ini)}</div><div class="nm2"><span class="muted">Il mio profilo</span><b>${esc(P.name)}</b>
       <span class="muted">${S.months.length} mesi in memoria${S.months.length ? ` · presente in ${nm}` : ""} · ${ST.list.length} statini</span></div>
-      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 70</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
+      <span style="display:flex;flex-direction:column;gap:4px"><button class="mini" id="pedit">Cambia</button><button class="mini" id="pset">⚙️ Impostazioni</button><button class="mini" id="pntf">${ntfBtnLabel()}</button><button class="mini" id="pfb">${window.__isOwner ? "📬 Pareri" : "💬 Dì la tua"}</button><button class="mini" id="pimp" style="display:none">📥 Importa dal Lettore</button>${FIX.length ? `<button class="mini" id="pfix">🗂️ Rotazioni salvate (${FIX.length})</button>` : ""}<span class="muted" style="font-size:11px;align-self:center">versione 70</span>${window.__logout ? `<button class="mini" id="pout">Esci</button>` : ""}</span></div>`;
     $("pedit").onclick = () => { P.editing = true; renderProf(); };
-    $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
+    $("pset").onclick = () => openSettings(); $("pntf").onclick = () => ntfPanel(); $("pfb").onclick = () => fbPanel(); $("pimp").onclick = () => { showTab("car"); renderCar(); impPanel(); }; if ($("pfix")) $("pfix").onclick = () => { showTab("car"); renderCar(); openFix(); const x = $("xpanel"); if (x) x.scrollIntoView({ behavior: "smooth", block: "start" }); };
     if ($("pout")) $("pout").onclick = () => window.__logout();
     return;
   }
