@@ -254,6 +254,26 @@ h2{font-size:16px;margin:0 0 8px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .tabs>.tab{font-weight:600!important;font-size:11px!important;letter-spacing:-.2px}
 .salgate .gt b{white-space:nowrap}
+
+/* ===== HOME a icone: niente barra in basso, ogni pagina si apre dalla Home ===== */
+.tabs,.modesw{display:none!important}
+.wrap{padding-bottom:44px}
+body:not([data-tab=home]) .hero,body:not([data-tab=home]) #home-prof,body:not([data-tab=home]) #home-adm{display:none}
+body:not([data-tab=home]) #t-home{display:none}
+.topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;background:var(--bg);padding:10px 0 8px;margin:0 0 8px}
+body[data-tab=home] .topbar{display:none}
+.topbar button{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:8px 14px;cursor:pointer}
+.topbar b{font-size:18px;letter-spacing:-.2px}
+.subtabs{top:52px!important}
+#prof #pset,#prof #pntf,#prof #pfb{display:none}
+.qk{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}.qk .btn{flex:1 1 auto;text-align:center;padding:12px 10px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 6px}
+.tile{--t:#7a68d4;font:inherit;text-align:left;display:flex;flex-direction:column;gap:10px;min-height:118px;padding:14px;border:1px solid var(--line);border-radius:22px;background:color-mix(in srgb,var(--t) 11%,var(--card));color:var(--ink);cursor:pointer;box-shadow:0 8px 18px -14px rgba(60,40,120,.45)}
+.tile:active{transform:scale(.97)}
+.tile .ic{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-size:25px;background:color-mix(in srgb,var(--t) 24%,var(--card))}
+.tile b{font-size:16px;line-height:1.15;display:block}
+.tile span.sb{font-size:12px;color:var(--mut);line-height:1.25;display:block;margin-top:2px}
+.tile.wide{grid-column:1/-1;min-height:0;flex-direction:row;align-items:center}
 </style>
 </head>
 <body class="locked">
@@ -274,8 +294,8 @@ h2{font-size:16px;margin:0 0 8px}
   </div>
 
 
-  <div class="card hidden" id="admin"></div>
-  <div class="card" id="prof"></div>
+    <div class="topbar"><button id="tbhome">‹ Home</button><b id="tbtitle"></b></div>
+  <section id="t-home"><div id="home-oggi"></div><div class="qk"><button class="btn" id="qkfoto">📷 Statino da foto</button><button class="btn ghost" id="qkman">✍️ A mano</button><button class="btn ghost" id="qkwho">🗺️ Chi c'è adesso</button></div><div class="tiles" id="tiles"></div><div id="home-prof"><div class="card" id="prof"></div></div><div id="home-adm"><div class="card hidden" id="admin"></div></div></section>
 
   <section id="t-car" class="card hidden"><div id="car"></div></section>
   <section id="t-stats" class="card hidden"><h3>📊 Statistiche</h3><div id="statpage"></div></section>
@@ -1006,7 +1026,22 @@ function showTab(t) {
   document.body.dataset.tab = t; { const tb = document.querySelector(`.tab[data-t="${t}"]`); if (tb && tb.dataset.grp && !document.body.classList.contains("m-" + tb.dataset.grp)) setMode(tb.dataset.grp, true); }
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t)); { const u = document.querySelector('.tab[data-t="usc"]'); if (u) u.classList.toggle("on", ["ag", "cmp", "sim", "imp"].includes(t)); }
   ["ag", "me", "cmp", "sim", "st", "cc", "imp", "sal", "car", "stats"].forEach(k => { const el = $("t-" + k); if (el) el.classList.toggle("hidden", k !== t); });
+  try { const up = $("upcard"); if (up) up.classList.toggle("hidden", !["me", "car"].includes(t)); const tt = { home: "", me: "Turni", st: "Statini", sal: "Stipendio", ag: "Uscite · Agenda", cmp: "Uscite · Confronta", sim: "Uscite · Incroci", imp: "Uscite · Impegni", cc: "Gruppi", car: "Carica", stats: "Statistiche" }; const tl = $("tbtitle"); if (tl) tl.textContent = tt[t] || ""; if (t === "home") { homeTiles(); oggiRender(); } } catch (e) {}
 }
+function homeTiles() {
+  const vis = k => { const tb = document.querySelector(`.tab[data-t="${k}"]`); return !tb || tb.style.display !== "none"; };
+  const nt = typeof ntfOn === "function" && ntfOn();
+  const L = [["me", "🕘", "Turni", "Oggi e griglia del mese", "#7a68d4"], ["st", "📋", "Statini", "Voli, diario e condivisione", "#3a9bd5"], ["sal", "💰", "Stipendio", "Busta e obiettivo", "#3fa66b"], ["usc", "🎉", "Uscite", "Agenda, incroci, impegni", "#e0709a"], ["cc", "👥", "Gruppi", "Colleghe e inviti", "#e3a23b"], ["car", "📥", "Carica", "Griglie, foto, variazioni", "#8a6fd1"], ["stats", "📊", "Statistiche", "I tuoi numeri", "#3bb3a8"], ["ntf", nt ? "🔔" : "🔕", "Notifiche", nt ? "Attive su questo telefono" : "Toccala per attivarle", "#d9822b"], ["fb", "💬", window.__isOwner ? "Pareri" : "Dì la tua", window.__isOwner ? "Cosa dicono i tester" : "Scrivi cosa ne pensi", "#5b8def"], ["set", "⚙️", "Impostazioni", "Preferenze e backup", "#7b8794"]];
+  const box = $("tiles"); if (!box) return;
+  box.innerHTML = L.filter(x => !["me", "st", "sal", "usc", "cc", "car", "stats"].includes(x[0]) || vis(x[0])).map(x => `<button class="tile" data-go="${x[0]}" style="--t:${x[4]}"><span class="ic">${x[1]}</span><span><b>${x[2]}</b><span class="sb">${x[3]}</span></span></button>`).join("");
+  box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const k = b.dataset.go;
+    if (k === "ntf") return ntfPanel().then(() => {}, () => {}); if (k === "fb") return fbPanel(); if (k === "set") return openSettings();
+    const tb = document.querySelector(`.tab[data-t="${k}"]`); if (tb) tb.click(); else showTab(k); });
+}
+document.addEventListener("click", ev => { const c = ev.target.closest && ev.target.closest("#tbhome,#qkfoto,#qkman,#qkwho"); if (!c) return;
+  if (c.id === "tbhome") return showTab("home");
+  document.querySelector('.tab[data-t="st"]').click();
+  if (c.id === "qkfoto") $("stfile").click(); else if (c.id === "qkman") $("stman").click(); else setTimeout(() => { const m = $("stmap"); if (m) m.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150); });
 document.querySelectorAll(".tab").forEach(x => x.onclick = () => { showTab(x.dataset.t); if (x.dataset.t === "sim") renderSim(); if (x.dataset.t === "cc") renderCC(); if (x.dataset.t === "ag") renderAg(); if (x.dataset.t === "imp") renderImp(); if (x.dataset.t === "sal") renderSal(); if (x.dataset.t === "car") renderCar(); if (x.dataset.t === "st") { try { stMapRender(); } catch (e) {} } });
 
 function renderAll() {
@@ -2141,9 +2176,9 @@ function oggiHtml() {
     <div class="oggic"><span class="muted">Domani · ${t1.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" })}</span><div>${dayLine(b && b.c)}</div>
       ${s1 ? `<div class="oggis">▶ ${actLine(stNextAct(s1, "00:00"), s1)}</div>` : ""}</div></div>${warn}${bk}`;
 }
-function oggiRender() { const o = $("oggi"); if (!o) return; try { o.innerHTML = oggiHtml() + propInHtml(); propListen(); } catch (e) { o.innerHTML = ""; console.warn(e); }
+function oggiRender() { const o = $("oggi"); if (!o) return; try { const hh = oggiHtml() + propInHtml(); o.innerHTML = hh; const ho = $("home-oggi"); if (ho) ho.innerHTML = hh; propListen(); } catch (e) { o.innerHTML = ""; console.warn(e); }
   const b = $("oggibk"); if (b) b.onclick = () => { openSettings(); setTimeout(() => { const s = $("bksec"); if (s) s.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100); }; }
-setInterval(() => { if (document.body.dataset.tab === "me" && !document.hidden) oggiRender(); }, 120000);
+setInterval(() => { if (["me", "home"].includes(document.body.dataset.tab) && !document.hidden) oggiRender(); }, 120000);
 
 // ================= NOTIFICHE AD APP CHIUSA (Web Push gratuito tramite un piccolo servizio Cloudflare) =================
 // Dal servizio passa solo "c'è una novità per questa persona": nessun turno, nome o statino.
@@ -3902,7 +3937,7 @@ document.querySelectorAll("#upkind [data-uk]").forEach(c => c.onclick = () => {
   if (k === "squadre") { $("uplab").textContent = "📷 Carica la tabella delle squadre"; $("uphint").textContent = "Foto o screenshot della tabella settimanale (squadre × lunedì…domenica): trovo la tua riga, ti chiedo la durata del turno e se ogni settimana si passa alla riga successiva."; }
   else { $("uplab").textContent = "Importa griglia"; $("uphint").textContent = "PDF, Excel, CSV, foto o scansione. Vedi sempre un'anteprima prima di salvare."; }
 });
-setTimeout(() => { let m = null; try { m = localStorage.getItem("turni.modo"); } catch (e) {} if (!m) m = (SET.tipo === "studente" || SET.tipo === "privato") ? "uscite" : "turni"; setMode(m, false); }, 50);
+setTimeout(() => { let m = null; try { m = localStorage.getItem("turni.modo"); } catch (e) {} if (!m) m = (SET.tipo === "studente" || SET.tipo === "privato") ? "uscite" : "turni"; setMode(m, true); showTab("home"); }, 50);
 // ================= STIPENDIO (solo su questo dispositivo) =================
 // I dati della busta paga NON vengono mai salvati online né condivisi: restano nel browser di questo telefono.
 const SALK = () => { let u = ""; try { u = ST.uid || ""; } catch (e) {} return "inturno.stip." + (u || "locale"); };
@@ -5143,6 +5178,7 @@ function renderStList() { try { stMapRender(); } catch (e) {}
   $("stlist").querySelectorAll("[data-del]").forEach(b => b.onclick = () => { if (pend === b.dataset.del) { delEntry(pend); } else { pend = b.dataset.del; b.textContent = "Conferma"; } });
 }
 renderStList(); stStatus(); renderProf(); applySet(); renderAll();
+try { showTab("home"); } catch (e) { console.warn(e); }
 initCaps();
 
 // ripristina preferenze
