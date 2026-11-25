@@ -2291,13 +2291,21 @@ function contBind(root) {
 
 // statino condiviso con un gruppo: scelta per statino; per quelli vecchi vale ancora la condivisione del gruppo
 function sharesTo(e, g) { return Array.isArray(e.gruppi) ? e.gruppi.includes(g) : !!(g && CC.shareG[g]); }
+function sgPeopleHtml(d) {
+  const all = [...CC.dir.entries()].map(([u, x]) => ({ u, n: x.nome })).filter(x => x.n).sort((p, q) => p.n.localeCompare(q.n));
+  if (!all.length) return "";
+  const sel = all.filter(x => d.persone.includes(x.u)), q = (ST.pq || "").trim().toLowerCase();
+  const shown = all.length <= 8 ? all : sel.concat(q.length >= 2 ? all.filter(x => !d.persone.includes(x.u) && x.n.toLowerCase().includes(q)).slice(0, 8) : []);
+  return `<div style="margin-top:10px"><b>👤 Una persona sola</b>${all.length > 8 ? `<input id="sgq" placeholder="Cerca per nome" value="${esc(ST.pq || "")}" style="margin:6px 0 0">` : ""}<div class="chips" style="margin:6px 0 0">${shown.map(x => `<span class="chip ${d.persone.includes(x.u) ? "sel" : ""}" data-sp="${esc(x.u)}">${d.persone.includes(x.u) ? "✓ " : ""}${esc(x.n)}</span>`).join("") || `<span class="muted" style="font-size:12px">Scrivi almeno 2 lettere del nome.</span>`}</div></div>`;
+}
 function sgHtml(d) {
   const gs = CC.mine.filter(g => CC.groups.has(g));
-  if (!(ST.shareOpen || (d.gruppi || []).length)) return `<p class="muted" style="font-size:12px;margin:8px 0 0">🔒 Con "Salva solo per me" lo statino resta sul tuo telefono, per le statistiche. Con "Salva e condividi" scegli i gruppi.</p>`;
-  if (!gs.length) return `<p class="muted" style="font-size:12px;margin:8px 0 0">Non sei in nessun gruppo: lo statino può restare solo sul tuo telefono.</p>`;
-  const tutti = gs.every(g => d.gruppi.includes(g));
-  return `<div class="ovbox" style="margin:10px 0 0"><b>👥 Condividi con</b><div class="chips" style="margin:6px 0 0"><span class="chip ${tutti ? "sel" : ""}" data-sgm="all">${tutti ? "✓ " : ""}Tutti i gruppi</span>${gs.map(g => `<span class="chip ${d.gruppi.includes(g) ? "sel" : ""}" data-sg="${esc(g)}">${d.gruppi.includes(g) ? "✓ " : ""}${esc(CC.groups.get(g).nome)}</span>`).join("")}</div>
-    <p class="muted" style="font-size:11px;margin:6px 0 0">Chi è nei gruppi scelti vede lo statino e riceve un avviso. Puoi sceglierne uno, più di uno o tutti.</p><div id="sgerr" class="err"></div></div>`;
+  if (!(ST.shareOpen || (d.gruppi || []).length || (d.persone || []).length)) return `<p class="muted" style="font-size:12px;margin:8px 0 0">🔒 Con "Salva solo per me" lo statino resta sul tuo telefono, per le statistiche. Con "Salva e condividi" scegli gruppi o persone.</p>`;
+  const pe = sgPeopleHtml(d);
+  if (!gs.length && !pe) return `<p class="muted" style="font-size:12px;margin:8px 0 0">Non sei in nessun gruppo: lo statino può restare solo sul tuo telefono.</p>`;
+  const tutti = gs.length && gs.every(g => d.gruppi.includes(g));
+  return `<div class="ovbox" style="margin:10px 0 0"><b>👥 Condividi con</b>${gs.length ? `<div class="chips" style="margin:6px 0 0"><span class="chip ${tutti ? "sel" : ""}" data-sgm="all">${tutti ? "✓ " : ""}Tutti i gruppi</span>${gs.map(g => `<span class="chip ${d.gruppi.includes(g) ? "sel" : ""}" data-sg="${esc(g)}">${d.gruppi.includes(g) ? "✓ " : ""}${esc(CC.groups.get(g).nome)}</span>`).join("")}</div>` : ""}<div id="sgpl">${pe}</div>
+    <p class="muted" style="font-size:11px;margin:6px 0 0">Chi è nei gruppi o tra le persone scelte vede lo statino e riceve un avviso. Puoi scegliere gruppi, persone o entrambi.</p><div id="sgerr" class="err"></div></div>`;
 }
 // ================= PROPOSTE ("ti va un caffè?") ai colleghi che sono al terminal scelto =================
 // Ogni proposta è un documento in "proposte": la vedono solo chi la invia e i destinatari. Nessun numero di telefono.
@@ -2323,9 +2331,13 @@ function propOutHtml() {
     const r = Object.values(x.risposte || {}); return `<div style="font-size:12px;margin:2px 0">${esc(x.testo)} → ${x.a.length} · sì ${r.filter(v => v === "sì").length} · no ${r.filter(v => v === "no").length}</div>`;
   }).join("");
 }
+function statinoRicevHtml() {
+  const L = PROP.inc.filter(x => x.tipo === "statino" && x.statino); if (!L.length) return "";
+  return `<div class="oggiw">📋 <b>Statini ricevuti</b>${L.map(x => { const st = x.statino; return `<details class="more" style="margin-top:6px"><summary><b>${esc(x.daNome || "Una collega")}</b> · ${esc(fmtDate(st.data))}${/^T[1-5]$/.test(st.terminal || "") ? " · Terminal " + st.terminal[1] : ""}${st.inizio && st.fine ? " · " + esc(st.inizio) + "–" + esc(st.fine) : ""}${st.pausa ? " · pausa " + esc(st.pausa) : ""}</summary>${(st.voli || []).map(v => `<div class="fli"><span class="t">${esc(v.dalle || "")}${v.alle ? "–" + esc(v.alle) : ""}</span><span><b>${esc(v.volo || v.attivita || "Attività")}</b>${v.destinazione ? " " + esc(v.destinazione) : ""}${v.postazione ? " · banco " + esc(v.postazione) : ""}${v.gate ? " · gate " + esc(v.gate) : ""}${v.volo && v.attivita ? " · " + esc(v.attivita) : ""}</span></div>`).join("") || `<div class="muted" style="font-size:12px">Nessun volo indicato.</div>`}${st.note ? `<div class="muted" style="font-size:12px">${esc(st.note)}</div>` : ""}</details>`; }).join("")}</div>`;
+}
 function propInHtml() {
-  const L = PROP.inc.filter(x => !(x.risposte || {})[ST.uid]); if (!L.length) return "";
-  return `<div class="oggiw">📨 ${L.map(x => `<div style="margin-top:4px"><b>${esc(x.daNome || "Una collega")}</b>: ${esc(x.testo)} <button class="mini" data-pr="${esc(x.id)}|sì">Sì</button> <button class="mini" data-pr="${esc(x.id)}|no">No</button></div>`).join("")}</div>`;
+  const L = PROP.inc.filter(x => x.tipo !== "statino" && !(x.risposte || {})[ST.uid]); if (!L.length) return statinoRicevHtml();
+  return statinoRicevHtml() + `<div class="oggiw">📨 ${L.map(x => `<div style="margin-top:4px"><b>${esc(x.daNome || "Una collega")}</b>: ${esc(x.testo)} <button class="mini" data-pr="${esc(x.id)}|sì">Sì</button> <button class="mini" data-pr="${esc(x.id)}|no">No</button></div>`).join("")}</div>`;
 }
 function propBind(root) {
   root.querySelectorAll("[data-pt]").forEach(c => c.onclick = () => { PROP.T = c.dataset.pt; root.querySelectorAll("[data-pt]").forEach(o => o.classList.toggle("sel", o === c)); root.querySelector("#propl").innerHTML = propListHtml(); });
@@ -2345,7 +2357,7 @@ function propListen() {
   PROP.unsub = ST.db.collection("proposte").where("a", "array-contains", ST.uid).onSnapshot(snap => {
     const now = Date.now(), list = []; (snap.docs || []).forEach(d => { const x = Object.assign({ id: d.id }, d.data()); if (now - new Date(x.creato) < 2 * 864e5) list.push(x); });
     PROP.inc = list.sort((a, b) => String(b.creato).localeCompare(String(a.creato)));
-    PROP.inc.filter(x => !(x.risposte || {})[ST.uid] && !PROP.seen.includes(x.id) && now - new Date(x.creato) < 36e5).forEach(x => { PROP.seen.push(x.id); ntfSend("☕ " + (x.daNome || "Proposta"), x.testo, "prop:" + x.id); });
+    PROP.inc.filter(x => !(x.risposte || {})[ST.uid] && !PROP.seen.includes(x.id) && now - new Date(x.creato) < 36e5).forEach(x => { PROP.seen.push(x.id); ntfSend(x.tipo === "statino" ? "📋 Statino condiviso" : "☕ " + (x.daNome || "Proposta"), x.testo, "prop:" + x.id); });
     try { localStorage.setItem("inturno.propSeen", JSON.stringify(PROP.seen.slice(-200))); } catch {}
     try { oggiRender(); } catch {}
   }, e => console.warn("proposte", e));
@@ -5032,6 +5044,7 @@ const FFIELDS = [["volo","Volo",""],["destinazione","Destinazione",""],["partenz
 function renderDraft(msg) {
   const d = ST.draft;
   if (!Array.isArray(d.gruppi)) d.gruppi = [];
+  if (!Array.isArray(d.persone)) d.persone = [];
   let h = (ST.img ? `<img class="thumb" src="${ST.img}">` : "") + (msg ? `<p class="muted">${msg}</p>` : "");
   h += `<div class="fgrid">
    <div><label>Data</label><input type="date" data-k="data" value="${v(d.data)}"></div>
@@ -5048,7 +5061,7 @@ function renderDraft(msg) {
   h += `</div><div class="stbtn" style="margin-top:8px"><button class="mini" id="addfl">+ Aggiungi volo/attività</button></div>
    <div class="fgrid"><div class="full"><label>Note della giornata</label><textarea data-k="note" rows="2">${v(d.note)}</textarea></div></div>
    ${sgHtml(d)}
-   <div class="stbtn" style="margin-top:12px"><button class="btn ghost" id="stsave">Salva solo per me</button><button class="btn" id="stshare">Salva e condividi${ST.shareOpen || d.gruppi.length ? "" : "…"}</button><button class="btn ghost" id="stcancel">Annulla</button></div>`;
+   <div class="stbtn" style="margin-top:12px"><button class="btn ghost" id="stsave">Salva solo per me</button><button class="btn" id="stshare">Salva e condividi${ST.shareOpen || d.gruppi.length || d.persone.length ? "" : "…"}</button><button class="btn ghost" id="stcancel">Annulla</button></div>`;
   $("stedit").innerHTML = h;
   $("stedit").querySelectorAll("[data-k]").forEach(el => el.oninput = () => { d[el.dataset.k] = el.value; });
   $("stedit").querySelectorAll(".fl").forEach(fl => fl.querySelectorAll("[data-f]").forEach(el => el.oninput = () => { d.voli[+fl.dataset.i][el.dataset.f] = el.value; }));
@@ -5062,11 +5075,13 @@ function renderDraft(msg) {
   $("stedit").querySelectorAll("[data-sgm]").forEach(c => c.onclick = () => { const gs = CC.mine.filter(g => CC.groups.has(g)); d.gruppi = gs.every(g => d.gruppi.includes(g)) ? [] : gs; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-sg]").forEach(c => c.onclick = () => { const g = c.dataset.sg; d.gruppi = d.gruppi.includes(g) ? d.gruppi.filter(x => x !== g) : d.gruppi.concat([g]); renderDraft(msg); });
   $("stcancel").onclick = () => { ST.shareOpen = false; ST.draft = null; ST.img = null; $("stedit").innerHTML = ""; };
-  $("stsave").onclick = () => { d.gruppi = []; ST.shareOpen = false; saveDraft(); };
+  const spBind = () => { $("stedit").querySelectorAll("[data-sp]").forEach(c => c.onclick = () => { const u = c.dataset.sp; d.persone = d.persone.includes(u) ? d.persone.filter(x => x !== u) : d.persone.concat([u]); const q = $("sgq"); const had = !!q; renderDraft(msg); if (had && $("sgq")) $("sgq").focus(); }); const q = $("sgq"); if (q) q.oninput = () => { ST.pq = q.value; const box = $("sgpl"); if (box) { box.innerHTML = sgPeopleHtml(d); spBind(); const n = $("sgq"); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } } }; };
+  spBind();
+  $("stsave").onclick = () => { d.gruppi = []; d.persone = []; ST.shareOpen = false; saveDraft(); };
   $("stshare").onclick = () => { const gs = CC.mine.filter(g => CC.groups.has(g));
-    if (!ST.shareOpen && !d.gruppi.length) { ST.shareOpen = true; renderDraft(msg); return; }
-    if (!gs.length) { d.gruppi = []; ST.shareOpen = false; saveDraft(); return; }
-    if (!d.gruppi.length) { const e = $("sgerr"); if (e) e.textContent = "Scegli almeno un gruppo, oppure salva solo per te."; return; }
+    if (!ST.shareOpen && !d.gruppi.length && !d.persone.length) { ST.shareOpen = true; renderDraft(msg); return; }
+    if (!gs.length && !CC.dir.size) { d.gruppi = []; d.persone = []; ST.shareOpen = false; saveDraft(); return; }
+    if (!d.gruppi.length && !d.persone.length) { const e = $("sgerr"); if (e) e.textContent = "Scegli almeno un gruppo o una persona, oppure salva solo per te."; return; }
     ST.shareOpen = false; saveDraft(); };
 }
 async function saveDraft() {
@@ -5084,10 +5099,24 @@ async function saveDraft() {
   $("stedit").innerHTML = `<p class="muted">✓ Statino del ${esc(fmtDate(clean.data))} salvato${fw}${warn}. Resta nel Diario voli.</p>`;
   renderStList(); if (S.months.length) renderMe();
   try { PUSHQ.st = Date.now(); (clean.gruppi || []).forEach(g => { const memb = (CC.groups.get(g) || {}).membri || []; pushPing(memb, "statino:" + g, clean.id + ":" + (clean.salvato || ""), { t: "📋 Statino condiviso", b: `${String(P.name || "Qualcuno").split(/[ ,]+/)[0].replace(/^./, c => c.toUpperCase()).replace(/(?<=.)./g, c => c.toLowerCase())} ha condiviso lo statino${/^T[1-5]$/.test(clean.terminal || "") ? " · Terminal " + clean.terminal[1] : ""}` }); }); } catch (e) {}
+  try { await statinoToPeople(clean); } catch (e) { console.warn("statino persone", e); }
   publishSoon();
+}
+// statino inviato a singole persone: usa la raccolta "proposte" (nessuna modifica alle regole); lo vedono solo chi lo invia e chi lo riceve
+async function statinoToPeople(e) {
+  if (!ST.db || !ST.uid) return;
+  const ref = ST.db.collection("proposte").doc("stat_" + ST.uid.slice(0, 8) + "_" + e.id);
+  try { await ref.delete(); } catch (x) {}
+  const ids = (e.persone || []).filter(u => u && u !== ST.uid).slice(0, 50); if (!ids.length) return;
+  const nm = String(P.name || "Qualcuno").split(/[ ,]+/)[0].replace(/^./, c => c.toUpperCase()).replace(/(?<=.)./g, c => c.toLowerCase());
+  const body = `${nm} ha condiviso lo statino${/^T[1-5]$/.test(e.terminal || "") ? " · Terminal " + e.terminal[1] : ""}`;
+  await ref.set({ da: ST.uid, daNome: P.name || "", a: ids, tipo: "statino", testo: body, creato: new Date().toISOString(), risposte: {},
+    statino: { data: e.data || "", turno: e.turno || "", inizio: e.inizio || "", fine: e.fine || "", terminal: e.terminal || "", pausa: e.pausa || "", voli: (e.voli || []).slice(0, 40), note: e.note || "" } });
+  pushPing(ids, "statino-p", e.id + ":" + (e.salvato || ""), { t: "📋 Statino condiviso", b: body });
 }
 async function delEntry(id) {
   stFotoDel(id);
+  try { if (ST.db && ST.uid) ST.db.collection("proposte").doc("stat_" + ST.uid.slice(0, 8) + "_" + id).delete().catch(() => {}); } catch (x) {}
   ST.list = ST.list.filter(e => e.id !== id); lsSave();
   if (ST.col) { try { await ST.col.doc(id).delete(); } catch {} }
   renderStList(); if (S.months.length) renderMe();
