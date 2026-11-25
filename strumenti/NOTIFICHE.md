@@ -1,5 +1,8 @@
 # Avvisi ad app chiusa: attivazione (una volta sola, circa 10 minuti)
 
+> Metodo usato da telefono: il Worker `inturno-push` è collegato al repository GitHub (directory radice `strumenti`, file `wrangler.jsonc`). Cloudflare lo ripubblica da solo a ogni modifica. Resta da inserire una sola cosa a mano: il segreto `VAPID_JWK` (Impostazioni → Variabili e segreti).
+
+
 Serve un servizio gratuito di Cloudflare. Non chiede carta di pagamento.
 
 ## 1. Crea il servizio
