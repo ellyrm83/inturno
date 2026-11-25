@@ -2293,11 +2293,11 @@ function contBind(root) {
 function sharesTo(e, g) { return Array.isArray(e.gruppi) ? e.gruppi.includes(g) : !!(g && CC.shareG[g]); }
 function sgHtml(d) {
   const gs = CC.mine.filter(g => CC.groups.has(g));
-  if (!gs.length) return `<p class="muted" style="font-size:12px;margin:6px 0 0">Non sei in nessun gruppo: lo statino resta solo sul tuo telefono.</p>`;
-  const tutti = gs.every(g => d.gruppi.includes(g)), nessuno = !d.gruppi.some(g => gs.includes(g));
-  return `<div style="margin:8px 0 0"><div class="muted" style="font-size:12px;margin-bottom:4px">Chi può vedere questo statino?</div>
-    <div class="chips" style="margin:0"><span class="chip ${nessuno ? "sel" : ""}" data-sgm="none">🔒 Solo io</span>${gs.length > 1 ? `<span class="chip ${tutti ? "sel" : ""}" data-sgm="all">👥 Tutti i miei gruppi</span>` : ""}${gs.map(g => `<span class="chip ${d.gruppi.includes(g) && !(tutti && gs.length > 1) ? "sel" : ""}" data-sg="${esc(g)}">${esc(CC.groups.get(g).nome)}</span>`).join("")}</div>
-    <p class="muted" style="font-size:11px;margin:4px 0 0">${nessuno ? "Resta solo sul tuo telefono: lo usi per le statistiche e per tenere traccia dei voli." : "Chi è nei gruppi scelti lo vede e riceve un avviso. Puoi sceglierne uno, più di uno o tutti."}</p></div>`;
+  if (!(ST.shareOpen || (d.gruppi || []).length)) return `<p class="muted" style="font-size:12px;margin:8px 0 0">🔒 Con "Salva solo per me" lo statino resta sul tuo telefono, per le statistiche. Con "Salva e condividi" scegli i gruppi.</p>`;
+  if (!gs.length) return `<p class="muted" style="font-size:12px;margin:8px 0 0">Non sei in nessun gruppo: lo statino può restare solo sul tuo telefono.</p>`;
+  const tutti = gs.every(g => d.gruppi.includes(g));
+  return `<div class="ovbox" style="margin:10px 0 0"><b>👥 Condividi con</b><div class="chips" style="margin:6px 0 0"><span class="chip ${tutti ? "sel" : ""}" data-sgm="all">${tutti ? "✓ " : ""}Tutti i gruppi</span>${gs.map(g => `<span class="chip ${d.gruppi.includes(g) ? "sel" : ""}" data-sg="${esc(g)}">${d.gruppi.includes(g) ? "✓ " : ""}${esc(CC.groups.get(g).nome)}</span>`).join("")}</div>
+    <p class="muted" style="font-size:11px;margin:6px 0 0">Chi è nei gruppi scelti vede lo statino e riceve un avviso. Puoi sceglierne uno, più di uno o tutti.</p><div id="sgerr" class="err"></div></div>`;
 }
 // ================= PROPOSTE ("ti va un caffè?") ai colleghi che sono al terminal scelto =================
 // Ogni proposta è un documento in "proposte": la vedono solo chi la invia e i destinatari. Nessun numero di telefono.
@@ -5031,14 +5031,14 @@ const v = x => x == null ? "" : esc(x);
 const FFIELDS = [["volo","Volo",""],["destinazione","Destinazione",""],["partenza","Partenza (STD)","time"],["attivita","Attività","w2"],["terminal","Terminal",""],["postazione","Banco",""],["gate","Gate (imbarco)",""],["dalle","Dalle","time"],["alle","Alle","time"],["note","Note","w3"]];
 function renderDraft(msg) {
   const d = ST.draft;
-  if (!Array.isArray(d.gruppi)) d.gruppi = CC.mine.filter(g => CC.shareG[g]);
+  if (!Array.isArray(d.gruppi)) d.gruppi = [];
   let h = (ST.img ? `<img class="thumb" src="${ST.img}">` : "") + (msg ? `<p class="muted">${msg}</p>` : "");
   h += `<div class="fgrid">
    <div><label>Data</label><input type="date" data-k="data" value="${v(d.data)}"></div>
    <div><label>Turno</label><input data-k="turno" value="${v(d.turno)}" placeholder="es. F23"></div>
    <div><label>Inizio</label><input type="time" data-k="inizio" value="${v(d.inizio)}"></div>
    <div><label>Fine</label><input type="time" data-k="fine" value="${v(d.fine)}"></div>
-   <div class="full"><label>☕ Pausa (scritta a penna in fondo)</label><div class="chips" style="margin:0"><input type="time" data-k="pausa" value="${v(/^\d{2}:\d{2}$/.test(d.pausa || "") ? d.pausa : "")}" style="width:120px;display:inline-block"><span class="chip ${d.pausa === "CTC" ? "sel" : ""}" data-ctc="1">CTC · contatta RIT</span></div><div class="chips" style="margin:6px 0 0"><span class="chip ${d.rit ? "sel" : ""}" data-rit="1">📞 Ho contattato il RIT</span><span class="chip ${d.fineT ? "sel" : ""}" data-fine="1">🏁 Assegnato a fine turno</span></div>${sgHtml(d)}</div>
+   <div class="full"><label>☕ Pausa (scritta a penna in fondo)</label><div class="chips" style="margin:0"><input type="time" data-k="pausa" value="${v(/^\d{2}:\d{2}$/.test(d.pausa || "") ? d.pausa : "")}" style="width:120px;display:inline-block"><span class="chip ${d.pausa === "CTC" ? "sel" : ""}" data-ctc="1">CTC · contatta RIT</span></div><div class="chips" style="margin:6px 0 0"><span class="chip ${d.rit ? "sel" : ""}" data-rit="1">📞 Ho contattato il RIT</span><span class="chip ${d.fineT ? "sel" : ""}" data-fine="1">🏁 Assegnato a fine turno</span></div></div>
    <div class="full"><label>Terminal</label><div class="chips">${["T1", "T3"].map(t => `<span class="chip ${d.terminal === t ? "sel" : ""}" data-term="${t}">🛫 ${t}</span>`).join("")}<input data-k="terminal" value="${v(d.terminal)}" placeholder="altro" style="width:90px;display:inline-block"></div></div></div>
    <div class="sec">Voli e attività</div><div id="fls">`;
   d.voli.forEach((f, i) => {
@@ -5047,7 +5047,8 @@ function renderDraft(msg) {
   });
   h += `</div><div class="stbtn" style="margin-top:8px"><button class="mini" id="addfl">+ Aggiungi volo/attività</button></div>
    <div class="fgrid"><div class="full"><label>Note della giornata</label><textarea data-k="note" rows="2">${v(d.note)}</textarea></div></div>
-   <div class="stbtn" style="margin-top:12px"><button class="btn" id="stsave">Salva</button><button class="btn ghost" id="stcancel">Annulla</button></div>`;
+   ${sgHtml(d)}
+   <div class="stbtn" style="margin-top:12px"><button class="btn ghost" id="stsave">Salva solo per me</button><button class="btn" id="stshare">Salva e condividi${ST.shareOpen || d.gruppi.length ? "" : "…"}</button><button class="btn ghost" id="stcancel">Annulla</button></div>`;
   $("stedit").innerHTML = h;
   $("stedit").querySelectorAll("[data-k]").forEach(el => el.oninput = () => { d[el.dataset.k] = el.value; });
   $("stedit").querySelectorAll(".fl").forEach(fl => fl.querySelectorAll("[data-f]").forEach(el => el.oninput = () => { d.voli[+fl.dataset.i][el.dataset.f] = el.value; }));
@@ -5058,10 +5059,15 @@ function renderDraft(msg) {
   $("addfl").onclick = () => { d.voli.push({}); renderDraft(msg); };
   $("stedit").querySelectorAll("[data-rit]").forEach(c => c.onclick = () => { d.rit = !d.rit; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-fine]").forEach(c => c.onclick = () => { d.fineT = !d.fineT; renderDraft(msg); });
-  $("stedit").querySelectorAll("[data-sgm]").forEach(c => c.onclick = () => { const gs = CC.mine.filter(g => CC.groups.has(g)); d.gruppi = c.dataset.sgm === "all" ? gs : []; renderDraft(msg); });
+  $("stedit").querySelectorAll("[data-sgm]").forEach(c => c.onclick = () => { const gs = CC.mine.filter(g => CC.groups.has(g)); d.gruppi = gs.every(g => d.gruppi.includes(g)) ? [] : gs; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-sg]").forEach(c => c.onclick = () => { const g = c.dataset.sg; d.gruppi = d.gruppi.includes(g) ? d.gruppi.filter(x => x !== g) : d.gruppi.concat([g]); renderDraft(msg); });
-  $("stcancel").onclick = () => { ST.draft = null; ST.img = null; $("stedit").innerHTML = ""; };
-  $("stsave").onclick = saveDraft;
+  $("stcancel").onclick = () => { ST.shareOpen = false; ST.draft = null; ST.img = null; $("stedit").innerHTML = ""; };
+  $("stsave").onclick = () => { d.gruppi = []; ST.shareOpen = false; saveDraft(); };
+  $("stshare").onclick = () => { const gs = CC.mine.filter(g => CC.groups.has(g));
+    if (!ST.shareOpen && !d.gruppi.length) { ST.shareOpen = true; renderDraft(msg); return; }
+    if (!gs.length) { d.gruppi = []; ST.shareOpen = false; saveDraft(); return; }
+    if (!d.gruppi.length) { const e = $("sgerr"); if (e) e.textContent = "Scegli almeno un gruppo, oppure salva solo per te."; return; }
+    ST.shareOpen = false; saveDraft(); };
 }
 async function saveDraft() {
   const d = ST.draft; if (!d) return;
