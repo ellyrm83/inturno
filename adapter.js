@@ -2,6 +2,7 @@
 // Fornisce all'app le stesse funzioni che usava dentro Claude: db, user, downloads.
 (function () {
   const cfg = window.INTURNO_FIREBASE;
+  window.__errs = []; try { addEventListener("error", e => window.__errs.push(String(e.message || "errore").slice(0, 90) + " @" + (e.lineno || 0))); addEventListener("unhandledrejection", e => window.__errs.push("promessa: " + String((e.reason && e.reason.message) || e.reason).slice(0, 90))); } catch (e) {}
   let ready; window.__claudeReady = new Promise(r => (ready = r));
   const box = () => document.getElementById("gatebox");
   const show = html => { document.body.classList.add("locked"); const b = box(); if (b) b.innerHTML = html; };
@@ -112,6 +113,9 @@
   setTimeout(() => { try { const b = box(); if (!b || !document.body.classList.contains("locked") || !/Verifica accesso/.test(b.textContent)) return;
     const st = { accesso: "il login non risponde", proprietaria: "il collegamento ai dati non risponde", app: "l'app non parte" }[window.__gstep] || "il collegamento è lento";
     b.insertAdjacentHTML("beforeend", `<p class="muted" style="margin-top:10px">Ci sta mettendo troppo: ${st}. Controlla di avere rete o Wi-Fi attivi, spegni VPN o «Relay privato iCloud», e se il link l'hai aperto da WhatsApp o Instagram aprilo in Safari.</p><div class="stbtn" style="margin-top:8px"><button class="btn" id="gretry">Riprova</button><button class="btn ghost" id="gout">Esci e riprova</button></div>`);
+    (async () => { const t = (u) => Promise.race([fetch(u, { mode: "no-cors" }).then(() => "ok", () => "bloccato"), new Promise(r => setTimeout(() => r("lento"), 5000))]);
+      const [fsr, au] = await Promise.all([t("https://firestore.googleapis.com/"), t("https://identitytoolkit.googleapis.com/")]);
+      const d = document.createElement("p"); d.className = "muted"; d.style.cssText = "font-size:11px;margin-top:8px"; d.textContent = "Dettagli: fase " + window.__gstep + " · dati " + fsr + " · login " + au + " · errori " + ((window.__errs || []).slice(0, 3).join("; ") || "nessuno"); b.appendChild(d); })();
     document.getElementById("gretry").onclick = () => location.reload();
     document.getElementById("gout").onclick = () => { auth.signOut().catch(() => {}).then(() => { try { Object.keys(localStorage).filter(k => k.startsWith("turni.")).forEach(k => localStorage.removeItem(k)); } catch (e) {} location.reload(); }); }; } catch (e) {} }, 12000);
 

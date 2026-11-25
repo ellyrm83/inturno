@@ -4900,7 +4900,9 @@ async function gate(db, user) {
   const owner = await user.isOwner();
   if (owner) { window.__isOwner = true; unlock(); try { homeTiles(); } catch (e) {} startAdmin(db, user); return true; }
   return new Promise(resolve => {
-    let done = false;
+    let done = false, shown = false;
+    // se il server tarda a rispondere, intanto mostra la richiesta/codice invito (se poi risulti approvata, l'app si sblocca da sola)
+    setTimeout(() => { if (!done && !shown) { shown = true; showRequest(db); } }, 9000);
     db.doc("approvati/" + ST.uid).onSnapshot(snap => {
       if (snap.exists && snap.data().ok) {
         if (!done) { done = true; unlock(); setProfile(P.name || snap.data().nome); resolve(true); }
@@ -4909,7 +4911,7 @@ async function gate(db, user) {
       }
       if (done) { gateMsg(`<p>Il tuo accesso è stato revocato.</p>`); return; }
       if (snap.metadata.fromCache) return;
-      showRequest(db);
+      if (!shown) { shown = true; showRequest(db); }
     }, () => gateMsg(`<p>Non riesco a verificare l'accesso. Riprova più tardi.</p>`));
   });
 }
