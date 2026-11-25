@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="InTurno">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#0E5A8A">
+<meta name="theme-color" content="#0E5A8A"><meta name="color-scheme" content="light">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -18,8 +18,6 @@
 :root{--bg:#F3F5F8;--card:#ffffff;--ink:#14202B;--mut:#5B6B7B;--line:#E1E7ED;--acc:#0E5A8A;--accs:#E4EEF5;
 --work:#e6f0fc;--workink:#34507c;--rest:#cdeedd;--restink:#1d6847;--fer:#ffe0c4;--ferink:#975015;--ass:#e6dcff;--assink:#5a3ea6;--off:#ebe8f0;--offink:#5d5a6a;--hi:#fff2c2;
 --pink:#ffd9e6;--mint:#d4f3e5;--sky:#dbeafe;--peach:#ffe6d1;--lav:#e9e2ff;--sun:#fff0b8}
-@media(prefers-color-scheme:dark){:root{--bg:#0e1820;--card:#16232d;--ink:#e8eef3;--mut:#9fb0bf;--line:#273845;--acc:#6bb8ea;--accs:#1c3445;--work:#2a3550;--workink:#d4e2fb;--rest:#244a3b;--restink:#bff0d6;--fer:#55304d;--ferink:#ffd3ad;--ass:#3d3262;--assink:#ddd0ff;--off:#34323f;--offink:#cfcbd9;--hi:#45305f;
---pink:#4a2a38;--mint:#21423a;--sky:#24344d;--peach:#4a2f4f;--lav:#34305a;--sun:#4a4324}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Figtree",-apple-system,system-ui,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
 h1,h2,h3,.btn,.tab{font-family:"Figtree",-apple-system,system-ui,sans-serif}
@@ -217,7 +215,7 @@ h2{font-size:16px;margin:0 0 8px}
 .salbig>.muted:first-child{font-weight:700;font-size:13px;color:var(--ink)}
 .salnum{font-size:46px;line-height:1.05;font-weight:800;letter-spacing:-1.5px;margin:6px 0 12px;font-feature-settings:"tnum"}
 .salbar{height:10px;background:rgba(255,255,255,.55);border-radius:6px}
-@media (prefers-color-scheme:dark){.salbar{background:rgba(255,255,255,.12)}}
+
 .salbar i{border-radius:6px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
 .salkpi{position:relative;margin:14px -16px 0;padding:14px 16px 0;border-top:2px dashed color-mix(in srgb,var(--ink) 25%,transparent);text-align:left}
 .salkpi::before,.salkpi::after{content:"";position:absolute;top:-11px;width:20px;height:20px;border-radius:50%;background:var(--bg)}
@@ -1072,7 +1070,7 @@ function homeTiles() {
   const vis = k => { const tb = document.querySelector(`.tab[data-t="${k}"]`); return !tb || tb.style.display !== "none"; };
   const nt = typeof ntfOn === "function" && ntfOn();
   const G = [["Il mio lavoro", [["me", "Turni", "Oggi e griglia del mese"], ["st", "Statini", "Voli, diario, condivisione"], ["sal", "Stipendio", "Busta e obiettivo"], ["car", "Carica", "Griglie, foto, variazioni"], ["stats", "Statistiche", "I tuoi numeri"]]],
-    ["Insieme alle colleghe", [["usc", "Uscite", "Agenda, incroci, impegni"], ["cc", "Gruppi", "Colleghe e inviti"], ...(window.__isOwner ? [["inv", "Inviti", "Codici, richieste e persone"]] : [])]],
+    ["Insieme alle colleghe", [["usc", "Uscite", "Agenda, incroci, impegni"], ["cc", "Gruppi", "Colleghi e inviti"], ...(window.__isOwner ? [["inv", "Inviti", "Codici, richieste e persone"]] : [])]],
     ["App", [["ntf", "Notifiche", nt ? "Attive su questo telefono" : "Toccala per attivarle"], ["fb", window.__isOwner ? "Pareri" : "Dì la tua", window.__isOwner ? "Cosa dicono i tester" : "Scrivi cosa ne pensi"], ["set", "Impostazioni", "Account, lavoro, sicurezza"]]]];
   const box = $("tiles"); if (!box) return;
   box.innerHTML = G.map(g => { const it = g[1].filter(x => !["me", "st", "sal", "usc", "cc", "car", "stats"].includes(x[0]) || vis(x[0])); return it.length ? `<div class="hgrp"><span>${g[0]}</span><div class="hlist">${it.map(x => `<button class="hrow" data-go="${x[0]}"><span class="hi">${icoSvg(x[0])}</span><span class="hx"><b>${x[1]}</b><span>${x[2]}</span></span>${chevSvg}</button>`).join("")}</div></div>` : ""; }).join("");
@@ -1506,7 +1504,7 @@ async function ntfSend(title, body, tag) {
 function ntfDiff(key, items) { const prev = NTF.seen[key], cur = {}; items.forEach(([k, v]) => cur[k] = v); NTF.seen[key] = cur; ntfSave(); if (!prev) return []; return items.filter(([k, v]) => prev[k] !== v).map(([k]) => k); }
 function notifInv(inv) {
   const nu = ntfDiff("inv", [...inv.entries()].map(([g, d]) => [g, "1"]));
-  nu.forEach(g => { const d = inv.get(g) || {}; ntfSend("📨 Nuovo invito in un gruppo", `Ti hanno invitata in "${d.nome || "gruppo"}". Apri 👥 Gruppi per entrare.`, "inv-" + g); });
+  nu.forEach(g => { const d = inv.get(g) || {}; ntfSend("📨 Nuovo invito in un gruppo", `Ti hanno invitato in "${d.nome || "gruppo"}". Apri 👥 Gruppi per entrare.`, "inv-" + g); });
 }
 function notifData(g, map) {
   const gn = ((CC.groups && CC.groups.get(g)) || {}).nome || "gruppo", items = [];
@@ -1779,7 +1777,7 @@ function stNowList() {
   return out;
 }
 function stMapHtml() {
-  const L0 = stNowList(), me = L0.find(x => x.me), L = L0.filter(x => !x.me); if (!L.length) return `<p class="muted" style="font-size:13px">Adesso nessuna collega dei tuoi gruppi è in turno con uno statino condiviso. Quando le colleghe salvano lo statino con il terminal, qui vedi chi c'è e dove.</p>`;
+  const L0 = stNowList(), me = L0.find(x => x.me), L = L0.filter(x => !x.me); if (!L.length) return `<p class="muted" style="font-size:13px">Adesso nessun collega dei tuoi gruppi è in turno con uno statino condiviso. Quando i colleghi salvano lo statino con il terminal, qui vedi chi c'è e dove.</p>`;
   const Ts = [...new Set(L.map(x => x.T || "?"))].sort();
   const who = x => { const a = x.cur || x.next; return `<div class="mpp ${x.me ? "me" : ""}"><b>${esc(x.me ? "Tu" : x.nome.split(/[ ,]+/).filter(Boolean).slice(-1)[0] || x.nome)}</b><span>${a ? esc([a.attivita, a.volo].filter(Boolean).join(" · ")) : "in turno"}${a && a.postazione ? " · " + esc(a.postazione) : ""}${a && a.gate ? " · Gate " + esc(a.gate) : ""}</span><span class="muted">${x.st && x.st.pausa ? `<span class="muted">☕ ${x.st.pausa === "CTC" ? "pausa: chiedere al responsabile" : "pausa alle " + esc(x.st.pausa)}</span>` : ""}${x.cur ? `fino alle ${esc(x.cur.alle || x.cur.partenza || "")}` : x.next ? `dalle ${esc(x.next.dalle || "")}` : x.fine ? `fino alle ${esc(x.fine)}` : ""}</span>${!x.me && me && me.T && x.T ? `<span class="mpd ${x.T === me.T ? "near" : ""}">${x.T === me.T ? "nel tuo terminal" : "altro terminal"}</span>` : ""}</div>`; };
   return `<div class="mpw">${Ts.map(T => `<div class="mpt ${me && me.T === T ? "mine" : ""}"><div class="mph">${T === "?" ? "Terminal non indicato" : "🛫 " + esc(T)}</div>${stZoneGroup(L.filter(x => (x.T || "?") === T), who)}</div>`).join("")}</div>
@@ -2254,8 +2252,8 @@ function collOggiHtml() { try {
   const first = nm => nm.split(/[ ,]+/).filter(Boolean).slice(-1)[0] || nm;
   const sub = r => { if (r.c.kind !== "lavoro") return ""; const a = r.lv && (r.lv.cur || r.lv.next); return a ? esc([a.attivita, a.volo].filter(Boolean).join(" ") + (a.gate ? " · gate " + a.gate : "") + (r.lv.T ? " · " + r.lv.T : "")) : ""; };
   const body = rows.length ? rows.map(r => `<div class="hrow" style="cursor:default;min-height:58px"><span class="hx"><b style="font-size:16px">${esc(first(r.nm).charAt(0).toUpperCase() + first(r.nm).slice(1).toLowerCase())}${r.lv ? ` <span style="color:#2e9d62;font-size:12px">● in turno</span>` : ""}${r.mod ? ` <span style="color:#E8A317;font-size:12px">variazione</span>` : ""}</b><span>${dayLine(r.c)}${sub(r) ? " · " + sub(r) : ""}</span></span></div>`).join("")
-    : `<div class="hrow" style="cursor:default"><span class="hx"><span>Nessuna collega dei tuoi gruppi ha condiviso il turno di oggi.</span></span></div>`;
-  return `<div class="hgrp" id="hcoll"><span>Le colleghe oggi</span><div class="hlist">${body}</div></div>`; } catch (e) { return ""; } }
+    : `<div class="hrow" style="cursor:default"><span class="hx"><span>Nessun collega dei tuoi gruppi ha condiviso il turno di oggi.</span></span></div>`;
+  return `<div class="hgrp" id="hcoll"><span>I colleghi oggi</span><div class="hlist">${body}</div></div>`; } catch (e) { return ""; } }
 function ticketBind() { document.querySelectorAll("[data-tk]").forEach(x => x.onclick = () => { const k = x.dataset.tk; if (k === "car") return document.querySelector('.tab[data-t="car"]').click();
   if (k === "who") { const h = $("hcoll"); if (h) h.scrollIntoView({ behavior: "smooth", block: "start" }); return; } document.querySelector('.tab[data-t="st"]').click(); if (k === "foto") $("stfile").click(); else $("stman").click(); }); const b = $("oggibk"); if (b) b.onclick = () => { openSettings("backup"); }; }
 function oggiRender() { const o = $("oggi"); if (!o) return; try { const hh = oggiHtml() + propInHtml(); o.innerHTML = hh; const ho = $("home-oggi"); if (ho) ho.innerHTML = ticketHtml() + statinoOggiHtml() + propInHtml() + collOggiHtml() + homeExtra(); const hl = $("home-hello"); if (hl) hl.innerHTML = helloHtml(); ticketBind(); propListen(); } catch (e) { o.innerHTML = ""; console.warn(e); }
@@ -2435,7 +2433,7 @@ const PROP = { inc: [], out: [], unsub: null, unsubOut: null, T: "T1", seen: (()
 function propUidOf(nome) { for (const [, map] of CC.gdata) for (const [u, d] of map) if (d && d.nome === nome) return u; return null; }
 function propPanelHtml() {
   return `<details class="hist" id="propd"><summary>📨 Proponi un caffè</summary>
-    <p class="muted" style="font-size:12px">Scegli il terminal, spunta chi vuoi e invia. Vedono la proposta nell'app e rispondono sì o no. Compaiono solo le colleghe con lo statino condiviso in questo momento.</p>
+    <p class="muted" style="font-size:12px">Scegli il terminal, spunta chi vuoi e invia. Vedono la proposta nell'app e rispondono sì o no. Compaiono solo i colleghi con lo statino condiviso in questo momento.</p>
     <div class="ovtypes" style="margin:6px 0">${["T1", "T3"].map(T => `<span class="chip ${PROP.T === T ? "sel" : ""}" data-pt="${T}">🛫 ${T}</span>`).join("")}</div>
     <div id="propl"></div>
     <label style="font-size:13px">Messaggio</label><input id="proptxt" value="Ti va un caffè?">
@@ -2444,7 +2442,7 @@ function propPanelHtml() {
 }
 function propListHtml() {
   const L = stNowList().filter(x => !x.me && x.T === PROP.T), rows = L.map(x => ({ x, uid: propUidOf(x.nome) })).filter(r => r.uid);
-  if (!rows.length) return `<p class="muted" style="font-size:12px">Nessuna collega con lo statino condiviso al ${PROP.T} adesso.</p>`;
+  if (!rows.length) return `<p class="muted" style="font-size:12px">Nessun collega con lo statino condiviso al ${PROP.T} adesso.</p>`;
   return rows.map(r => `<label class="row" style="gap:8px;margin:4px 0"><input type="checkbox" value="${esc(r.uid)}"> <span>${esc(r.x.nome)}</span></label>`).join("");
 }
 function propOutHtml() {
@@ -2455,11 +2453,11 @@ function propOutHtml() {
 }
 function statinoRicevHtml() {
   const L = PROP.inc.filter(x => x.tipo === "statino" && x.statino); if (!L.length) return "";
-  return `<div class="oggiw">📋 <b>Statini ricevuti</b>${L.map(x => { const st = x.statino; return `<details class="more" style="margin-top:6px"><summary><b>${esc(x.daNome || "Una collega")}</b> · ${esc(fmtDate(st.data))}${/^T[1-5]$/.test(st.terminal || "") ? " · Terminal " + st.terminal[1] : ""}${st.inizio && st.fine ? " · " + esc(st.inizio) + "–" + esc(st.fine) : ""}${st.pausa ? " · pausa " + esc(st.pausa) : ""}</summary>${(st.voli || []).map(v => `<div class="fli"><span class="t">${esc(v.dalle || "")}${v.alle ? "–" + esc(v.alle) : ""}</span><span><b>${esc(v.volo || v.attivita || "Attività")}</b>${v.destinazione ? " " + esc(v.destinazione) : ""}${v.postazione ? " · banco " + esc(v.postazione) : ""}${v.gate ? " · gate " + esc(v.gate) : ""}${v.volo && v.attivita ? " · " + esc(v.attivita) : ""}</span></div>`).join("") || `<div class="muted" style="font-size:12px">Nessun volo indicato.</div>`}${st.note ? `<div class="muted" style="font-size:12px">${esc(st.note)}</div>` : ""}</details>`; }).join("")}</div>`;
+  return `<div class="oggiw">📋 <b>Statini ricevuti</b>${L.map(x => { const st = x.statino; return `<details class="more" style="margin-top:6px"><summary><b>${esc(x.daNome || "Un collega")}</b> · ${esc(fmtDate(st.data))}${/^T[1-5]$/.test(st.terminal || "") ? " · Terminal " + st.terminal[1] : ""}${st.inizio && st.fine ? " · " + esc(st.inizio) + "–" + esc(st.fine) : ""}${st.pausa ? " · pausa " + esc(st.pausa) : ""}</summary>${(st.voli || []).map(v => `<div class="fli"><span class="t">${esc(v.dalle || "")}${v.alle ? "–" + esc(v.alle) : ""}</span><span><b>${esc(v.volo || v.attivita || "Attività")}</b>${v.destinazione ? " " + esc(v.destinazione) : ""}${v.postazione ? " · banco " + esc(v.postazione) : ""}${v.gate ? " · gate " + esc(v.gate) : ""}${v.volo && v.attivita ? " · " + esc(v.attivita) : ""}</span></div>`).join("") || `<div class="muted" style="font-size:12px">Nessun volo indicato.</div>`}${st.note ? `<div class="muted" style="font-size:12px">${esc(st.note)}</div>` : ""}</details>`; }).join("")}</div>`;
 }
 function propInHtml() {
   const L = PROP.inc.filter(x => x.tipo !== "statino" && !(x.risposte || {})[ST.uid]); if (!L.length) return statinoRicevHtml();
-  return statinoRicevHtml() + `<div class="oggiw">📨 ${L.map(x => `<div style="margin-top:4px"><b>${esc(x.daNome || "Una collega")}</b>: ${esc(x.testo)} <button class="mini" data-pr="${esc(x.id)}|sì">Sì</button> <button class="mini" data-pr="${esc(x.id)}|no">No</button></div>`).join("")}</div>`;
+  return statinoRicevHtml() + `<div class="oggiw">📨 ${L.map(x => `<div style="margin-top:4px"><b>${esc(x.daNome || "Un collega")}</b>: ${esc(x.testo)} <button class="mini" data-pr="${esc(x.id)}|sì">Sì</button> <button class="mini" data-pr="${esc(x.id)}|no">No</button></div>`).join("")}</div>`;
 }
 function propBind(root) {
   root.querySelectorAll("[data-pt]").forEach(c => c.onclick = () => { PROP.T = c.dataset.pt; root.querySelectorAll("[data-pt]").forEach(o => o.classList.toggle("sel", o === c)); root.querySelector("#propl").innerHTML = propListHtml(); });
@@ -2566,11 +2564,11 @@ function renderOut(boxArg, minP) {
   const cap = x => x.charAt(0).toUpperCase() + x.slice(1);
   const lab = r => cap(o.full > 1 ? `${sd(r.i)} → ${sd(r.i + o.full - 1)}` : dayName(m, r.i));
   const chips = r => `<div class="pp">${r.ppl.map(p => `<span class="pc"><b>${esc(p.n)}</b> ${esc(p.t)}</span>`).join("")}${r.edge ? `<span class="pc warn">giorno dopo nel mese successivo: verifica</span>` : ""}</div>`;
-  const invite = r => ok.length < 2 ? `${o.label.replace(/^\S+\s/, "").replace(/\s*\(.*\)$/, "")} ${lab(r)}${o.full ? "" : ", " + r.when}? Io sono libera, ci sei? 😊` : `${o.label.replace(/^\S+\s/, "").replace(/\s*\(.*\)$/, "")} ${lab(r)}${o.full ? "" : ", " + r.when}? Siamo tutte libere (${who}). Chi c'è? 😊`;
+  const invite = r => ok.length < 2 ? `${o.label.replace(/^\S+\s/, "").replace(/\s*\(.*\)$/, "")} ${lab(r)}${o.full ? "" : ", " + r.when}? Io sono libera, ci sei? 😊` : `${o.label.replace(/^\S+\s/, "").replace(/\s*\(.*\)$/, "")} ${lab(r)}${o.full ? "" : ", " + r.when}? Siamo tutti liberi (${who}). Chi c'è? 😊`;
   const invites = res.map(invite);
   const calOf = r => { const d = new Date(m.year, m.month - 1, r.i + 1), t = o.full ? null : calWhen(r.when, o.rule ? 2.5 : o.need || 2); return { titolo: o.label.replace(/^\S+\s/, "").replace(/\s*\(.*\)$/, "") + (ok.length > 1 ? " con " + ok.slice(1).map(([n]) => nome1(n)).join(", ") : ""), data: d, inizio: t ? t.inizio : null, fine: t ? t.fine : null, giorni: o.full || 1, nota: "Organizzato con InTurno" }; };
   let h = "";
-  if (!res.length) h += `<div class="best none"><b>Nessuna data libera per tutte</b><div class="muted">${esc(who)} · ${esc(monthLabel(m))}</div></div>`;
+  if (!res.length) h += `<div class="best none"><b>Nessuna data libera per tutti</b><div class="muted">${esc(who)} · ${esc(monthLabel(m))}</div></div>`;
   else {
     const b0 = res[0];
     h += `<div class="best"><div class="lbl">⭐ Il giorno migliore</div><h3>${esc(lab(b0))}</h3>${b0.pay ? `<span class="pill">💰 dopo la paga</span>` : ""}<div class="t">${esc(b0.when)}</div>${chips(b0)}
@@ -2583,9 +2581,9 @@ function renderOut(boxArg, minP) {
     }
   }
   box.innerHTML = h + (res.length >= 2 && (CC.mine || []).length ? `<div class="stbtn" style="margin:8px 0"><button class="btn ghost" id="pollmk">📊 Sondaggio sulle date nel gruppo</button></div><div id="pollbox"></div>` : "") + shiftsHtml(o, ok, m, new Set(res.map(r => r.i))) + `<div id="swaps"></div><details class="rules"><summary>ℹ️ Come scelgo i giorni</summary><p class="muted">${o.rule
-      ? `Il giorno stesso tutte a riposo o con uscita entro le ${hhmm(o.rule.endBy)} e senza impegni la sera; il giorno dopo ${o.rule.nextRest ? "a riposo" : `a riposo o con inizio dalle ${hhmm(o.rule.nextFrom)} in poi`}. Regole modificabili in ⚙️ Impostazioni.${SET.paga.on && SET.paga.uscite ? " Prima le date dopo la paga." : ""}`
+      ? `Il giorno stesso tutti a riposo o con uscita entro le ${hhmm(o.rule.endBy)} e senza impegni la sera; il giorno dopo ${o.rule.nextRest ? "a riposo" : `a riposo o con inizio dalle ${hhmm(o.rule.nextFrom)} in poi`}. Regole modificabili in ⚙️ Impostazioni.${SET.paga.on && SET.paga.uscite ? " Prima le date dopo la paga." : ""}`
       : o.full ? `Tutte libere (riposo, ferie o assenza) per ${o.full === 1 ? "l'intera giornata" : o.full + " giorni di fila"}.`
-      : `Una finestra libera per tutte di almeno ${String(o.need).replace(".", ",")} ore, con 1 ora di margine prima e dopo ogni turno per gli spostamenti.`}
+      : `Una finestra libera per tutti di almeno ${String(o.need).replace(".", ",")} ore, con 1 ora di margine prima e dopo ogni turno per gli spostamenti.`}
       Prima vengono i giorni con più persone a riposo e i weekend.</p></details>`;
   box.querySelectorAll("[data-cp]").forEach(b => b.onclick = async ev => { ev.preventDefault();
     try { await navigator.clipboard.writeText(invites[+b.dataset.cp]); b.textContent = "Copiato ✓"; } catch { b.textContent = "Copia non riuscita"; } });
@@ -3564,7 +3562,7 @@ async function renderCC() {
     out.querySelectorAll("[data-gdel]").forEach(b => b.onclick = () => { GUEST[g].splice(+b.dataset.gdel, 1); saveGuests(); }); }
   out.querySelectorAll("[data-acc]").forEach(b => b.onclick = async () => { const g = b.dataset.acc; const d = CC.groups.get(g); b.disabled = true; try { await joinGroup(g); } catch (e) { b.disabled = false; b.textContent = "Riprova"; } });
   out.querySelectorAll("[data-dec]").forEach(b => b.onclick = async () => { const g = b.dataset.dec; const d = CC.groups.get(g); b.disabled = true; await groupUpdate(g, { invitati: (d.invitati || []).filter(u => u !== ST.uid) }); });
-  out.querySelectorAll("[data-inv]").forEach(b => b.onclick = async () => { b.disabled = true; b.textContent = "Invitata ✓"; const g = CC.sel, d = CC.groups.get(g); await groupUpdate(g, { invitati: [...new Set((d.invitati || []).concat(b.dataset.inv))] }); });
+  out.querySelectorAll("[data-inv]").forEach(b => b.onclick = async () => { b.disabled = true; b.textContent = "Invitato ✓"; const g = CC.sel, d = CC.groups.get(g); await groupUpdate(g, { invitati: [...new Set((d.invitati || []).concat(b.dataset.inv))] }); });
   if ($("ccprev")) { $("ccprev").onclick = () => { CC.day--; renderCC(); }; $("ccnext").onclick = () => { CC.day++; renderCC(); }; }
   if ($("ccq")) $("ccq").oninput = e => { const q = e.target.value.toLowerCase(); out.querySelectorAll("#ccl [data-nm]").forEach(r => r.style.display = r.dataset.nm.includes(q) ? "" : "none"); };
   if ($("gleave")) $("gleave").onclick = () => { const b = $("gleave"); if (!b.dataset.c) { b.dataset.c = 1; b.textContent = "Conferma uscita"; return; } const g = CC.sel; CC.sel = "tutti"; leaveGroup(g).catch(e => console.warn(e)); renderCC(); };
@@ -3740,7 +3738,7 @@ function renderAgDay(m, me, mine, ppl, pc, i, evs) {
   if (ev.length) h += ev.map(e => `<div class="pc ok" style="display:block;margin-top:6px">📌 ${esc(e.titolo)}${e.ora ? " · " + esc(e.ora) : ""} <span class="muted">(${e.priv ? "solo io" : esc(e.gname)})</span></div>`).join("");
   if (ppl.length) {
     h += `<div class="sec">Le tue persone</div><div class="pp">${ppl.map((n, k) => { const c = pc[k][i]; const free = isFree(c); return `<span class="pc ${free ? "ok" : ""}"><b>${esc(nome1(n))}</b> ${esc(st(c))}</span>`; }).join("")}</div>`;
-    h += `<div class="sec">Cosa potete fare</div>` + (acts.length ? acts.map(x => `<div class="act"><span>${OUT[x.a].label} ${x.okAll ? '<span class="pill" style="background:var(--rest);color:var(--restink)">tutti ✓</span>' : `<span class="muted">con ${x.okWho.map(nome1).join(", ")}</span>`}</span><span class="stbtn">${wa(`${OUT[x.a].label.replace(/^\S+\s/, "")} ${dl}? ${x.okAll ? "Siamo tutte libere" : "Siamo libere io e " + x.okWho.map(nome1).join(", ")} 😊`)}<button class="mini" data-agadd="${x.a}">📌</button></span></div>`).join("")
+    h += `<div class="sec">Cosa potete fare</div>` + (acts.length ? acts.map(x => `<div class="act"><span>${OUT[x.a].label} ${x.okAll ? '<span class="pill" style="background:var(--rest);color:var(--restink)">tutti ✓</span>' : `<span class="muted">con ${x.okWho.map(nome1).join(", ")}</span>`}</span><span class="stbtn">${wa(`${OUT[x.a].label.replace(/^\S+\s/, "")} ${dl}? ${x.okAll ? "Siamo tutti liberi" : "Siamo liberi io e " + x.okWho.map(nome1).join(", ")} 😊`)}<button class="mini" data-agadd="${x.a}">📌</button></span></div>`).join("")
       : `<p class="muted">Oggi niente incastri con le persone scelte.</p>`);
   }
   h += `<details class="more"><summary>➕ Aggiungi un evento a mano</summary><div class="fgrid"><div class="full"><label>Cosa</label><input id="evt" placeholder="es. Cena da Mario"></div><div><label>Ora</label><input type="time" id="evo"></div><div><label>Con</label><select id="evg"><option value="">Solo io</option>${(() => { try { return CC.mine.filter(g => CC.groups.has(g)).map(g => `<option value="${g}" ${AG.sel === g ? "selected" : ""}>${esc(CC.groups.get(g).nome)}</option>`).join(""); } catch { return ""; } })()}</select></div></div><button class="btn" id="evsave" style="margin-top:8px">Salva in agenda</button></details></div>`;
@@ -4012,7 +4010,7 @@ function drawWizard() {
   const steps = W.tipo === "griglia" ? 5 : 4, sn = W.tipo === "griglia" || W.step < 2 ? W.step : W.step - 1;
   const dots = `<div class="wdots">${Array.from({ length: steps }, (_, k) => `<i class="${k <= sn ? "on" : ""}"></i>`).join("")}</div>`;
   let h = `<div class="wizbox">${dots}`;
-  if (W.step === 0) h += `<div class="empty">${PEOPLE_SVG}</div><h2>Benvenuta in InTurno 👋</h2><p class="muted">Ti faccio qualche domanda per impostare l'app sul tuo modo di lavorare e di vivere. Puoi cambiare tutto dopo.</p>
+  if (W.step === 0) h += `<div class="empty">${PEOPLE_SVG}</div><h2>Benvenuto in InTurno 👋</h2><p class="muted">Ti faccio qualche domanda per impostare l'app sul tuo modo di lavorare e di vivere. Puoi cambiare tutto dopo.</p>
     <div class="fgrid"><div class="full"><label>Come ti chiami? (come compare nei turni, se li hai)</label><input id="wn" value="${esc(W.nome)}" placeholder="es. Rossi Maria" autocomplete="name"></div></div>`;
   if (W.step === 1) h += `<h2>Che lavoro fai?</h2><p class="muted">Scegli quello che ti somiglia di più.</p><div class="wcards">${PROFILI.map(p => `<div class="wcard ${W.tipo === p.k ? "on" : ""}" data-wt="${p.k}"><span class="wico">${p.ico}</span><b>${p.t}</b><span class="muted">${p.d}</span></div>`).join("")}</div>${["griglia", "ciclo", "fisso"].includes(W.tipo) ? `<div class="fgrid" style="margin-top:10px"><div><label>Azienda (facoltativo)</label><input id="waz" value="${esc(W.az || "")}" placeholder="es. la tua società"></div><div><label>Reparto / settore</label><input id="wrep" value="${esc(W.rep || "")}" placeholder="es. Check-in, Operation"></div></div><p class="muted" style="font-size:12px">Restano solo nel tuo profilo: servono a ricordare le regole della tua azienda. Ogni società ha le sue, e al passo dopo le imposti.</p>` : ""}`;
   if (W.step === 2 && W.tipo === "griglia") h += `<h2>Come si leggono i tuoi codici${W.az ? " in " + esc(W.az) : ""}?</h2><p class="muted">Ogni azienda scrive i turni a modo suo: dimmi la regola e l'app trasformerà ogni codice nel suo orario.<br>• <b>Formula</b>: la lettera indica le ore di lavoro e il numero diviso 2 l'ora di inizio (F30 = 6 ore dalle 15:00 → 15:00–21:00). Puoi cambiare lettere e divisore.<br>• <b>Legenda</b>: ogni codice ha il suo orario (M = 06:00–14:00…) oppure gli orari sono già scritti.</p>
@@ -4963,7 +4961,7 @@ async function redeemCode(db, raw, nome) {
   } catch (e) { say("Codice non valido, scaduto o già usato. Puoi chiederne uno nuovo oppure inviare una richiesta normale."); return false; }
   try { sessionStorage.removeItem("turni.invito"); localStorage.setItem("turni.profilo", N); } catch {}
   P.name = N; URL_CODE = "";
-  gateMsg(`<h2>✅ Codice accettato</h2><p>Benvenuta! Sto aprendo l'app…</p>`);
+  gateMsg(`<h2>✅ Codice accettato</h2><p>Benvenuto! Sto aprendo l'app…</p>`);
   try { await Promise.race([pushToOwner("🎟️ Nuova persona nell'app", N.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) + " è entrata con il tuo invito"), new Promise(r => setTimeout(r, 3500))]); } catch (e) {}
   setTimeout(() => { try { location.replace(location.pathname); } catch (e) { location.reload(); } }, 1200);
   return true;
