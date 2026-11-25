@@ -259,7 +259,7 @@ h2{font-size:16px;margin:0 0 8px}
 .tabs,.modesw{display:none!important}
 .wrap{padding-bottom:44px}
 .hero{display:none!important}
-body:not([data-tab=home]) .hero,body:not([data-tab=home]) #home-prof,body:not([data-tab=home]) #home-adm{display:none}
+body:not([data-tab=home]) .hero,body:not([data-tab=home]) #home-prof
 body:not([data-tab=home]) #t-home{display:none}
 .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;background:var(--bg);padding:10px 0 8px;margin:0 0 8px}
 body[data-tab=home] .topbar{display:none}
@@ -296,7 +296,8 @@ body[data-tab=home] .topbar{display:none}
 
 
     <div class="topbar"><button id="tbhome">‹ Home</button><b id="tbtitle"></b></div>
-  <section id="t-home"><h1 style="font-size:24px;font-weight:800;color:var(--acc);margin:6px 2px 10px;letter-spacing:-.3px">InTurno</h1><div id="home-oggi"></div><div class="qk"><button class="btn" id="qkfoto">📷 Statino da foto</button><button class="btn ghost" id="qkman">✍️ A mano</button><button class="btn ghost" id="qkwho">🗺️ Chi c'è adesso</button></div><div class="tiles" id="tiles"></div><div id="home-prof"><div class="card" id="prof"></div></div><div id="home-adm"><div class="card hidden" id="admin"></div></div></section>
+  <section id="t-home"><h1 style="font-size:24px;font-weight:800;color:var(--acc);margin:6px 2px 10px;letter-spacing:-.3px">InTurno</h1><div id="home-oggi"></div><div class="qk"><button class="btn" id="qkfoto">📷 Statino da foto</button><button class="btn ghost" id="qkman">✍️ A mano</button><button class="btn ghost" id="qkwho">🗺️ Chi c'è adesso</button></div><div class="tiles" id="tiles"></div><div id="home-prof"><div class="card" id="prof"></div></div></section>
+  <section id="t-inv" class="hidden"><div class="card hidden" id="admin"></div></section>
 
   <section id="t-car" class="card hidden"><div id="car"></div></section>
   <section id="t-stats" class="card hidden"><h3>📊 Statistiche</h3><div id="statpage"></div></section>
@@ -1018,6 +1019,7 @@ function setMode(m, keepTab) {
 }
 document.querySelectorAll(".modesw [data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
 function showTab(t) {
+  if (t === "inv" && !window.__isOwner) t = "home";
   try { if (lkNeeded(t)) { lkAsk(t); return; } } catch (e) {}
   if (t === "stats") setTimeout(renderStat, 0);
   if (t === "usc") { let k = "ag"; try { k = localStorage.getItem("turni.sub") || "ag"; } catch (e) {} if (!["ag", "cmp", "sim", "imp"].includes(k)) k = "ag"; setMode("uscite", true); const tb = document.querySelector(`.subtabs .tab[data-t="${k}"]`) || document.querySelector('.subtabs .tab[data-t="ag"]'); if (tb) { tb.click(); return; } t = "ag"; }
@@ -1026,17 +1028,17 @@ function showTab(t) {
   if (document.body.dataset.tab !== t) setTimeout(() => window.scrollTo({ top: 0 }), 0);
   document.body.dataset.tab = t; { const tb = document.querySelector(`.tab[data-t="${t}"]`); if (tb && tb.dataset.grp && !document.body.classList.contains("m-" + tb.dataset.grp)) setMode(tb.dataset.grp, true); }
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t)); { const u = document.querySelector('.tab[data-t="usc"]'); if (u) u.classList.toggle("on", ["ag", "cmp", "sim", "imp"].includes(t)); }
-  ["ag", "me", "cmp", "sim", "st", "cc", "imp", "sal", "car", "stats"].forEach(k => { const el = $("t-" + k); if (el) el.classList.toggle("hidden", k !== t); });
-  try { const up = $("upcard"); if (up) up.classList.toggle("hidden", !["me", "car"].includes(t)); const tt = { home: "", me: "Turni", st: "Statini", sal: "Stipendio", ag: "Uscite · Agenda", cmp: "Uscite · Confronta", sim: "Uscite · Incroci", imp: "Uscite · Impegni", cc: "Gruppi", car: "Carica", stats: "Statistiche" }; const tl = $("tbtitle"); if (tl) tl.textContent = tt[t] || ""; if (t === "home") { homeTiles(); oggiRender(); } } catch (e) {}
+  ["ag", "me", "cmp", "sim", "st", "cc", "imp", "sal", "car", "stats", "inv"].forEach(k => { const el = $("t-" + k); if (el) el.classList.toggle("hidden", k !== t); });
+  try { const up = $("upcard"); if (up) up.classList.toggle("hidden", !["me", "car"].includes(t)); const tt = { home: "", me: "Turni", st: "Statini", sal: "Stipendio", ag: "Uscite · Agenda", cmp: "Uscite · Confronta", sim: "Uscite · Incroci", imp: "Uscite · Impegni", cc: "Gruppi", car: "Carica", stats: "Statistiche", inv: "Inviti e persone" }; const tl = $("tbtitle"); if (tl) tl.textContent = tt[t] || ""; if (t === "home") { homeTiles(); oggiRender(); } } catch (e) {}
 }
 function homeTiles() {
   const vis = k => { const tb = document.querySelector(`.tab[data-t="${k}"]`); return !tb || tb.style.display !== "none"; };
   const nt = typeof ntfOn === "function" && ntfOn();
-  const L = [["me", "🕘", "Turni", "Oggi e griglia del mese", "#7a68d4"], ["st", "📋", "Statini", "Voli, diario e condivisione", "#3a9bd5"], ["sal", "💰", "Stipendio", "Busta e obiettivo", "#3fa66b"], ["usc", "🎉", "Uscite", "Agenda, incroci, impegni", "#e0709a"], ["cc", "👥", "Gruppi", "Colleghe e inviti", "#e3a23b"], ["car", "📥", "Carica", "Griglie, foto, variazioni", "#8a6fd1"], ["stats", "📊", "Statistiche", "I tuoi numeri", "#3bb3a8"], ["ntf", nt ? "🔔" : "🔕", "Notifiche", nt ? "Attive su questo telefono" : "Toccala per attivarle", "#d9822b"], ...(window.__isOwner ? [["inv", "🎟️", "Inviti", "Codici e richieste di accesso", "#c2579a"]] : []), ["fb", "💬", window.__isOwner ? "Pareri" : "Dì la tua", window.__isOwner ? "Cosa dicono i tester" : "Scrivi cosa ne pensi", "#5b8def"], ["set", "⚙️", "Impostazioni", "Preferenze e backup", "#7b8794"]];
+  const L = [["me", "🕘", "Turni", "Oggi e griglia del mese", "#7a68d4"], ["st", "📋", "Statini", "Voli, diario e condivisione", "#3a9bd5"], ["sal", "💰", "Stipendio", "Busta e obiettivo", "#3fa66b"], ["usc", "🎉", "Uscite", "Agenda, incroci, impegni", "#e0709a"], ["cc", "👥", "Gruppi", "Colleghe e inviti", "#e3a23b"], ["car", "📥", "Carica", "Griglie, foto, variazioni", "#8a6fd1"], ["stats", "📊", "Statistiche", "I tuoi numeri", "#3bb3a8"], ["ntf", nt ? "🔔" : "🔕", "Notifiche", nt ? "Attive su questo telefono" : "Toccala per attivarle", "#d9822b"], ...(window.__isOwner ? [["inv", "🎟️", "Inviti", "Codici, richieste e persone", "#c2579a"]] : []), ["fb", "💬", window.__isOwner ? "Pareri" : "Dì la tua", window.__isOwner ? "Cosa dicono i tester" : "Scrivi cosa ne pensi", "#5b8def"], ["set", "⚙️", "Impostazioni", "Preferenze e backup", "#7b8794"]];
   const box = $("tiles"); if (!box) return;
   box.innerHTML = L.filter(x => !["me", "st", "sal", "usc", "cc", "car", "stats"].includes(x[0]) || vis(x[0])).map(x => `<button class="tile" data-go="${x[0]}" style="--t:${x[4]}"><span class="ic">${x[1]}</span><span><b>${x[2]}</b><span class="sb">${x[3]}</span></span></button>`).join("");
   box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const k = b.dataset.go;
-    if (k === "inv") { const a = $("admin"); if (a) a.scrollIntoView({ behavior: "smooth", block: "start" }); return; } if (k === "ntf") return ntfPanel().then(() => {}, () => {}); if (k === "fb") return fbPanel(); if (k === "set") return openSettings();
+    if (k === "inv") return showTab("inv"); if (k === "ntf") return ntfPanel().then(() => {}, () => {}); if (k === "fb") return fbPanel(); if (k === "set") return openSettings();
     const tb = document.querySelector(`.tab[data-t="${k}"]`); if (tb) tb.click(); else showTab(k); });
 }
 document.addEventListener("click", ev => { const c = ev.target.closest && ev.target.closest("#tbhome,#qkfoto,#qkman,#qkwho"); if (!c) return;
