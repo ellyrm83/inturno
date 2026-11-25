@@ -1779,8 +1779,8 @@ function stNowList() {
   return out;
 }
 function stMapHtml() {
-  const L = stNowList(); if (!L.length) return `<p class="muted" style="font-size:13px">Adesso nessuno è in turno con uno statino salvato. Quando tu o le colleghe dei tuoi gruppi salvate lo statino con il terminal, qui vedete chi c'è e dove.</p>`;
-  const me = L.find(x => x.me), Ts = [...new Set(L.map(x => x.T || "?"))].sort();
+  const L0 = stNowList(), me = L0.find(x => x.me), L = L0.filter(x => !x.me); if (!L.length) return `<p class="muted" style="font-size:13px">Adesso nessuna collega dei tuoi gruppi è in turno con uno statino condiviso. Quando le colleghe salvano lo statino con il terminal, qui vedi chi c'è e dove.</p>`;
+  const Ts = [...new Set(L.map(x => x.T || "?"))].sort();
   const who = x => { const a = x.cur || x.next; return `<div class="mpp ${x.me ? "me" : ""}"><b>${esc(x.me ? "Tu" : x.nome.split(/[ ,]+/).filter(Boolean).slice(-1)[0] || x.nome)}</b><span>${a ? esc([a.attivita, a.volo].filter(Boolean).join(" · ")) : "in turno"}${a && a.postazione ? " · " + esc(a.postazione) : ""}${a && a.gate ? " · Gate " + esc(a.gate) : ""}</span><span class="muted">${x.st && x.st.pausa ? `<span class="muted">☕ ${x.st.pausa === "CTC" ? "pausa: chiedere al responsabile" : "pausa alle " + esc(x.st.pausa)}</span>` : ""}${x.cur ? `fino alle ${esc(x.cur.alle || x.cur.partenza || "")}` : x.next ? `dalle ${esc(x.next.dalle || "")}` : x.fine ? `fino alle ${esc(x.fine)}` : ""}</span>${!x.me && me && me.T && x.T ? `<span class="mpd ${x.T === me.T ? "near" : ""}">${x.T === me.T ? "nel tuo terminal" : "altro terminal"}</span>` : ""}</div>`; };
   return `<div class="mpw">${Ts.map(T => `<div class="mpt ${me && me.T === T ? "mine" : ""}"><div class="mph">${T === "?" ? "Terminal non indicato" : "🛫 " + esc(T)}</div>${stZoneGroup(L.filter(x => (x.T || "?") === T), who)}</div>`).join("")}</div>
     <p class="muted" style="font-size:11px;margin:6px 0 0">Nessun GPS: la posizione viene dal terminal scritto nello statino, e la vedono solo i gruppi con cui condividi.</p>`;
