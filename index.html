@@ -7,22 +7,22 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="InTurno">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#7a68d4">
+<meta name="theme-color" content="#0E5A8A">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2324577e'/%3E%3Ctext x='32' y='42' font-size='26' font-family='Arial' font-weight='700' fill='white' text-anchor='middle'%3EIT%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="icon-192.png">
 
 <title>InTurno – turni, incastri e uscite</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f8f4fc;--card:#ffffff;--ink:#2d2b3d;--mut:#7a7690;--line:#ece6f4;--acc:#7a68d4;--accs:#efeafe;
+:root{--bg:#F3F5F8;--card:#ffffff;--ink:#14202B;--mut:#5B6B7B;--line:#E1E7ED;--acc:#0E5A8A;--accs:#E4EEF5;
 --work:#e6f0fc;--workink:#34507c;--rest:#cdeedd;--restink:#1d6847;--fer:#ffe0c4;--ferink:#975015;--ass:#e6dcff;--assink:#5a3ea6;--off:#ebe8f0;--offink:#5d5a6a;--hi:#fff2c2;
 --pink:#ffd9e6;--mint:#d4f3e5;--sky:#dbeafe;--peach:#ffe6d1;--lav:#e9e2ff;--sun:#fff0b8}
-@media(prefers-color-scheme:dark){:root{--bg:#1b1a24;--card:#252431;--ink:#efedf7;--mut:#a7a3bb;--line:#363445;--acc:#b2a5ff;--accs:#35305a;--work:#2a3550;--workink:#d4e2fb;--rest:#244a3b;--restink:#bff0d6;--fer:#55304d;--ferink:#ffd3ad;--ass:#3d3262;--assink:#ddd0ff;--off:#34323f;--offink:#cfcbd9;--hi:#45305f;
+@media(prefers-color-scheme:dark){:root{--bg:#0e1820;--card:#16232d;--ink:#e8eef3;--mut:#9fb0bf;--line:#273845;--acc:#6bb8ea;--accs:#1c3445;--work:#2a3550;--workink:#d4e2fb;--rest:#244a3b;--restink:#bff0d6;--fer:#55304d;--ferink:#ffd3ad;--ass:#3d3262;--assink:#ddd0ff;--off:#34323f;--offink:#cfcbd9;--hi:#45305f;
 --pink:#4a2a38;--mint:#21423a;--sky:#24344d;--peach:#4a2f4f;--lav:#34305a;--sun:#4a4324}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Nunito",-apple-system,system-ui,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
-h1,h2,h3,.btn,.tab{font-family:"Nunito",-apple-system,system-ui,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Figtree",-apple-system,system-ui,"Segoe UI",sans-serif;-webkit-text-size-adjust:100%}
+h1,h2,h3,.btn,.tab{font-family:"Figtree",-apple-system,system-ui,sans-serif}
 .wrap{max-width:1000px;margin:auto;padding:18px 14px 96px}
 h1{font-size:22px;margin:0}
 .sub{color:var(--mut);font-size:13px;margin:2px 0 14px}
@@ -272,7 +272,7 @@ body[data-tab=home] .topbar{display:none}
 .sgroup{margin:12px 0 0;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
 .srow{--t:#7a68d4;display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 14px;border:0;border-top:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .srow:first-child{border-top:0}.srow:active{background:color-mix(in srgb,var(--t) 10%,var(--card))}
-.srow .sic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-size:22px;flex-shrink:0;background:color-mix(in srgb,var(--t) 20%,var(--card))}
+.srow .sic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-size:22px;flex-shrink:0;background:var(--accs)}.srow .sic svg{stroke:var(--acc)}
 .srow .stx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.srow .stx b{font-size:16px}.srow .stx span{font-size:13px;color:var(--mut)}
 .srow .sch{font-size:26px;color:var(--mut);line-height:1}
 .shead{display:flex;align-items:center;gap:12px;margin-bottom:12px}.shead b{font-size:18px}
@@ -283,6 +283,30 @@ body[data-tab=home] .topbar{display:none}
 .tile b{font-size:16px;line-height:1.15;display:block}
 .tile span.sb{font-size:12px;color:var(--mut);line-height:1.25;display:block;margin-top:2px}
 .tile.wide{grid-column:1/-1;min-height:0;flex-direction:row;align-items:center}
+
+.hello{display:flex;align-items:center;justify-content:space-between;padding:6px 4px 14px}.hello small{display:block;font-size:14px;color:var(--mut)}.hello b{display:block;font-size:28px;font-weight:700;letter-spacing:-.5px;line-height:1.1}
+.hello .av{width:46px;height:46px;border-radius:50%;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:600;font-size:16px}
+.tkt{position:relative;filter:drop-shadow(0 8px 16px rgba(14,90,138,.16));margin-bottom:20px}
+.tkt .tt{background:var(--card);border-radius:22px 22px 0 0;overflow:hidden}
+.tkt .th{background:#0E5A8A;color:#fff;padding:13px 22px;display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:600}.tkt .th i{font-style:normal;font:500 14px "DM Mono",monospace;color:#BFE0F5}
+.tkt .tb{padding:22px 22px 24px;display:flex;flex-direction:column;gap:18px}
+.tkt .tr{display:flex;align-items:center;justify-content:space-between}.tkt .tr div{display:flex;flex-direction:column;gap:2px}.tkt .tr div:last-child{align-items:flex-end}
+.tkt .tr small{font-size:13px;color:var(--mut);font-weight:600}.tkt .tr strong{font-size:40px;font-weight:800;letter-spacing:-1.5px;line-height:1;font-variant-numeric:tabular-nums}
+.tkt .tr svg{stroke:var(--acc)}
+.tkt .big{font-size:30px;font-weight:800;letter-spacing:-.8px}
+.tkt .ch{display:flex;gap:10px}.tkt .ch div{flex:1;background:var(--accs);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:1px;min-width:0}.tkt .ch small{font-size:12px;color:var(--mut);font-weight:600}.tkt .ch span{font:500 17px "DM Mono",monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tkt .nt{position:relative;height:0}.tkt .nt:before,.tkt .nt:after{content:"";position:absolute;top:-11px;width:22px;height:22px;border-radius:50%;background:var(--bg)}.tkt .nt:before{left:-11px}.tkt .nt:after{right:-11px}.tkt .nt hr{position:absolute;left:18px;right:18px;top:-1px;margin:0;border:0;border-top:2px dashed var(--line)}
+.tkt .ts{background:var(--card);border-radius:0 0 22px 22px;padding:20px 18px 18px;display:flex;flex-direction:column;gap:12px}
+.tkt .st{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600}.tkt .st:before{content:"";width:9px;height:9px;border-radius:50%;background:#E8A317;flex-shrink:0}.tkt .st.ok:before{background:#2e9d62}
+.tkt .bt{display:flex;gap:8px}.tkt .bt button{height:50px;border-radius:14px;font:inherit;font-weight:600;font-size:15px;cursor:pointer;border:1.5px solid var(--line);background:var(--card);color:var(--ink);flex:1}.tkt .bt button.p{flex:1.5;border:0;background:var(--acc);color:#fff;font-size:16px}
+.tkt .xx{padding:0 18px 4px;background:var(--card)}
+.hgrp{margin:0 0 14px}.hgrp>span{display:block;font-size:14px;font-weight:600;color:var(--mut);padding:0 6px 8px}
+.hlist{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden}
+.hrow{display:flex;align-items:center;gap:14px;width:100%;min-height:64px;padding:10px 16px;border:0;border-top:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;text-align:left;cursor:pointer}.hrow:first-child{border-top:0}.hrow:active{background:var(--accs)}
+.hrow .hi{width:40px;height:40px;border-radius:12px;background:var(--accs);display:grid;place-items:center;flex-shrink:0}.hrow .hi svg{stroke:var(--acc)}
+.hrow .hx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.hrow .hx b{font-size:17px;font-weight:600}.hrow .hx span{font-size:14px;color:var(--mut)}
+.hrow>svg{stroke:var(--mut);flex-shrink:0}
+.card,.sgroup{border-radius:20px}
 </style>
 </head>
 <body class="locked">
@@ -304,7 +328,7 @@ body[data-tab=home] .topbar{display:none}
 
 
     <div class="topbar"><button id="tbhome">‹ Home</button><b id="tbtitle"></b></div>
-  <section id="t-home"><h1 style="font-size:24px;font-weight:800;color:var(--acc);margin:6px 2px 10px;letter-spacing:-.3px">InTurno</h1><div id="home-oggi"></div><div class="qk"><button class="btn" id="qkfoto">📷 Statino da foto</button><button class="btn ghost" id="qkman">✍️ A mano</button><button class="btn ghost" id="qkwho">🗺️ Chi c'è adesso</button></div><div class="tiles" id="tiles"></div><div id="home-prof"><div class="card" id="prof"></div></div></section>
+  <section id="t-home"><div id="home-hello"></div><div id="home-oggi"></div><div id="tiles"></div><div id="home-prof"><div class="card" id="prof"></div></div></section>
   <section id="t-pan" class="hidden"></section>
   <section id="t-inv" class="hidden"><div class="card hidden" id="admin"></div></section>
 
@@ -1041,12 +1065,17 @@ function showTab(t) {
   ["ag", "me", "cmp", "sim", "st", "cc", "imp", "sal", "car", "stats", "inv", "pan"].forEach(k => { const el = $("t-" + k); if (el) el.classList.toggle("hidden", k !== t); });
   try { const up = $("upcard"); if (up) up.classList.toggle("hidden", !["me", "car"].includes(t)); const tt = { home: "", me: "Turni", st: "Statini", sal: "Stipendio", ag: "Uscite · Agenda", cmp: "Uscite · Confronta", sim: "Uscite · Incroci", imp: "Uscite · Impegni", cc: "Gruppi", car: "Carica", stats: "Statistiche", inv: "Inviti e persone" }; const tl = $("tbtitle"); if (tl) tl.textContent = tt[t] || ""; if (t === "home") { homeTiles(); oggiRender(); } } catch (e) {}
 }
+const IC = { me:"M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2", st:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h8M8 9h2", sal:"M18 7a7 7 0 1 0 0 10M4 10h10M4 14h10", usc:"M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", cc:"M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75", car:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12", stats:"M18 20V10M12 20V4M6 20v-6", ntf:"M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0", fb:"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z", set:"M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6", inv:"M3 9a3 3 0 0 0 0 6v3a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-3a3 3 0 0 1 0-6V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1zM13 5v14", account:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", lavoro:"M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2", uscite:"M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", notifiche:"M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0", sicurezza:"M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4", backup:"M12 3C7 3 3 4.3 3 6s4 3 9 3 9-1.3 9-3-4-3-9-3zM3 6v6c0 1.7 4 3 9 3s9-1.3 9-3V6M3 12v6c0 1.7 4 3 9 3s9-1.3 9-3v-6" };
+const icoSvg = (k, z) => `<svg viewBox="0 0 24 24" width="${z || 22}" height="${z || 22}" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${IC[k] || ""}"/></svg>`;
+const chevSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>`;
 function homeTiles() {
   const vis = k => { const tb = document.querySelector(`.tab[data-t="${k}"]`); return !tb || tb.style.display !== "none"; };
   const nt = typeof ntfOn === "function" && ntfOn();
-  const L = [["me", "🕘", "Turni", "Oggi e griglia del mese", "#7a68d4"], ["st", "📋", "Statini", "Voli, diario e condivisione", "#3a9bd5"], ["sal", "💰", "Stipendio", "Busta e obiettivo", "#3fa66b"], ["usc", "🎉", "Uscite", "Agenda, incroci, impegni", "#e0709a"], ["cc", "👥", "Gruppi", "Colleghe e inviti", "#e3a23b"], ["car", "📥", "Carica", "Griglie, foto, variazioni", "#8a6fd1"], ["stats", "📊", "Statistiche", "I tuoi numeri", "#3bb3a8"], ["ntf", nt ? "🔔" : "🔕", "Notifiche", nt ? "Attive su questo telefono" : "Toccala per attivarle", "#d9822b"], ...(window.__isOwner ? [["inv", "🎟️", "Inviti", "Codici, richieste e persone", "#c2579a"]] : []), ["fb", "💬", window.__isOwner ? "Pareri" : "Dì la tua", window.__isOwner ? "Cosa dicono i tester" : "Scrivi cosa ne pensi", "#5b8def"], ["set", "⚙️", "Impostazioni", "Preferenze e backup", "#7b8794"]];
+  const G = [["Il mio lavoro", [["me", "Turni", "Oggi e griglia del mese"], ["st", "Statini", "Voli, diario, condivisione"], ["sal", "Stipendio", "Busta e obiettivo"], ["car", "Carica", "Griglie, foto, variazioni"], ["stats", "Statistiche", "I tuoi numeri"]]],
+    ["Insieme alle colleghe", [["usc", "Uscite", "Agenda, incroci, impegni"], ["cc", "Gruppi", "Colleghe e inviti"], ...(window.__isOwner ? [["inv", "Inviti", "Codici, richieste e persone"]] : [])]],
+    ["App", [["ntf", "Notifiche", nt ? "Attive su questo telefono" : "Toccala per attivarle"], ["fb", window.__isOwner ? "Pareri" : "Dì la tua", window.__isOwner ? "Cosa dicono i tester" : "Scrivi cosa ne pensi"], ["set", "Impostazioni", "Account, lavoro, sicurezza"]]]];
   const box = $("tiles"); if (!box) return;
-  box.innerHTML = L.filter(x => !["me", "st", "sal", "usc", "cc", "car", "stats"].includes(x[0]) || vis(x[0])).map(x => `<button class="tile" data-go="${x[0]}" style="--t:${x[4]}"><span class="ic">${x[1]}</span><span><b>${x[2]}</b><span class="sb">${x[3]}</span></span></button>`).join("");
+  box.innerHTML = G.map(g => { const it = g[1].filter(x => !["me", "st", "sal", "usc", "cc", "car", "stats"].includes(x[0]) || vis(x[0])); return it.length ? `<div class="hgrp"><span>${g[0]}</span><div class="hlist">${it.map(x => `<button class="hrow" data-go="${x[0]}"><span class="hi">${icoSvg(x[0])}</span><span class="hx"><b>${x[1]}</b><span>${x[2]}</span></span>${chevSvg}</button>`).join("")}</div></div>` : ""; }).join("");
   box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const k = b.dataset.go;
     if (k === "inv") return showTab("inv"); if (k === "ntf" || k === "fb" || k === "set") { showTab("pan"); $("tbtitle").textContent = k === "ntf" ? "Notifiche" : k === "fb" ? (window.__isOwner ? "Pareri" : "Dì la tua") : "Impostazioni"; if (k === "ntf") ntfPanel(); else if (k === "fb") fbPanel(); else openSettings(); return; }
     const tb = document.querySelector(`.tab[data-t="${k}"]`); if (tb) tb.click(); else showTab(k); });
@@ -2190,7 +2219,31 @@ function oggiHtml() {
     <div class="oggic"><span class="muted">Domani · ${t1.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short" })}</span><div>${dayLine(b && b.c)}</div>
       ${s1 ? `<div class="oggis">▶ ${actLine(stNextAct(s1, "00:00"), s1)}</div>` : ""}</div></div>${warn}${bk}`;
 }
-function oggiRender() { const o = $("oggi"); if (!o) return; try { const hh = oggiHtml() + propInHtml(); o.innerHTML = hh; const ho = $("home-oggi"); if (ho) ho.innerHTML = hh; propListen(); } catch (e) { o.innerHTML = ""; console.warn(e); }
+
+function helloHtml() { const n = String(P.name || "").split(/[ ,]+/).filter(Boolean); const first = n.length ? n[n.length - 1] : ""; const ini = n.slice(0, 2).map(x => x[0]).join("").toUpperCase();
+  const d = new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  return `<div class="hello"><div><small>${esc(d.charAt(0).toUpperCase() + d.slice(1))}</small><b>${first ? "Ciao " + esc(first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()) : "InTurno"}</b></div>${ini ? `<div class="av">${esc(ini)}</div>` : ""}</div>`; }
+function homeExtra() { try { const t = oggiHtml(); const m = t.match(/<div class="oggiw">[\s\S]*?<\/div>/), k = t.match(/<div class="oggib">[\s\S]*?<\/div>/); return (m ? m[0] : "") + (k ? k[0] : ""); } catch (e) { return ""; } }
+function ticketHtml() {
+  if (!P.name || !S.months.length) return `<div class="tkt"><div class="tt"><div class="th"><span>Il tuo turno di oggi</span></div><div class="tb"><span class="muted">Carica i turni del mese per vedere qui il tuo turno.</span></div></div><div class="nt"><hr></div><div class="ts"><div class="bt"><button class="p" data-tk="car">Carica i turni</button></div></div></div>`;
+  const t0 = new Date(), t1 = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + 1);
+  const a = myDayCode(new Date(t0.getFullYear(), t0.getMonth(), t0.getDate())), b = myDayCode(t1), c = a && a.c, s0 = ST.list.find(e => e.data === isoDay(t0));
+  const lab = x => !x ? "—" : x.kind === "lavoro" ? String(x.label || "").replace(/\*$/, "") || "Lavoro" : x.kind === "riposo" ? "Riposo" : x.kind === "ferie" ? "Ferie" : x.label || "—";
+  const T = (s0 && s0.terminal) || "";
+  let body;
+  if (c && c.kind === "lavoro") { const dur = Math.round((c.end - c.start) * 10) / 10;
+    body = `<div class="tr"><div><small>Inizio</small><strong>${hhmm(c.start)}</strong></div><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h18M14 6l6 6-6 6"/></svg><div><small>Fine</small><strong>${hhmm(c.end)}</strong></div></div>
+      <div class="ch"><div><small>Turno</small><span>${esc(lab(c))}</span></div><div><small>Durata</small><span>${dur} ore</span></div><div><small>Domani</small><span>${esc(lab(b && b.c))}</span></div></div>`;
+  } else body = `<div class="big">${c ? (c.kind === "riposo" ? "🌿 Riposo" : c.kind === "ferie" ? "🏖️ Ferie" : esc(lab(c))) : "Turno non caricato"}</div><div class="ch"><div><small>Domani</small><span>${esc(lab(b && b.c))}</span></div></div>`;
+  const has = s0 && (s0.voli || []).length, work = c && c.kind === "lavoro";
+  const stat = !work ? "" : has ? `<div class="st ok">Statino di oggi inserito</div>` : `<div class="st">Lo statino di oggi non è ancora inserito</div>`;
+  const nx = has ? stNextAct(s0, `${String(t0.getHours()).padStart(2, "0")}:${String(t0.getMinutes()).padStart(2, "0")}`) : null;
+  return `<div class="tkt"><div class="tt"><div class="th"><span>Il tuo turno di oggi</span>${T ? `<i>${esc(T)}</i>` : ""}</div><div class="tb">${body}</div></div><div class="nt"><hr></div>
+    <div class="ts">${stat}${nx ? `<div style="font-size:14px">▶ ${actLine(nx, s0)}</div>` : ""}<div class="bt"><button class="p" data-tk="foto">Statino da foto</button><button data-tk="man" style="flex:.8">A mano</button><button data-tk="who">Chi c'è</button></div></div></div>`;
+}
+function ticketBind() { document.querySelectorAll("[data-tk]").forEach(x => x.onclick = () => { const k = x.dataset.tk; if (k === "car") return document.querySelector('.tab[data-t="car"]').click();
+  document.querySelector('.tab[data-t="st"]').click(); if (k === "foto") $("stfile").click(); else if (k === "man") $("stman").click(); else setTimeout(() => { const m = $("stmap"); if (m) m.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150); }); const b = $("oggibk"); if (b) b.onclick = () => { openSettings("backup"); }; }
+function oggiRender() { const o = $("oggi"); if (!o) return; try { const hh = oggiHtml() + propInHtml(); o.innerHTML = hh; const ho = $("home-oggi"); if (ho) ho.innerHTML = ticketHtml() + propInHtml() + homeExtra(); const hl = $("home-hello"); if (hl) hl.innerHTML = helloHtml(); ticketBind(); propListen(); } catch (e) { o.innerHTML = ""; console.warn(e); }
   const b = $("oggibk"); if (b) b.onclick = () => { openSettings("backup"); setTimeout(() => { const s = $("bksec"); if (s) s.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100); }; }
 setInterval(() => { if (["me", "home"].includes(document.body.dataset.tab) && !document.hidden) oggiRender(); }, 120000);
 
@@ -2721,7 +2774,7 @@ function openSettings(startSec) {
   const draw = () => {
     if (!sec) {
       box.innerHTML = `<div class="ovbox"><b style="font-size:18px">⚙️ Impostazioni</b>${note ? `<p class="muted" style="margin:6px 0 0">${note}</p>` : ""}
-        <div class="sgroup">${SECS.map(x => `<button class="srow" data-sec="${x[0]}" style="--t:${x[4]}"><span class="sic">${x[1]}</span><span class="stx"><b>${x[2]}</b><span>${x[3]}</span></span><span class="sch">›</span></button>`).join("")}</div>
+        <div class="sgroup">${SECS.map(x => `<button class="srow" data-sec="${x[0]}" style="--t:${x[4]}"><span class="sic">${icoSvg(x[0])}</span><span class="stx"><b>${x[2]}</b><span>${x[3]}</span></span><span class="sch">${chevSvg}</span></button>`).join("")}</div>
         <div class="stbtn" style="margin-top:12px"><button class="btn ghost" id="setx">Chiudi</button></div></div>`;
       box.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => { const k = b.dataset.sec; if (k === "notifiche") { ntfPanel(); return; } sec = k; note = ""; draw(); });
       $("setx").onclick = () => { box.innerHTML = ""; };
