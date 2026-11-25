@@ -1032,11 +1032,11 @@ function showTab(t) {
 function homeTiles() {
   const vis = k => { const tb = document.querySelector(`.tab[data-t="${k}"]`); return !tb || tb.style.display !== "none"; };
   const nt = typeof ntfOn === "function" && ntfOn();
-  const L = [["me", "🕘", "Turni", "Oggi e griglia del mese", "#7a68d4"], ["st", "📋", "Statini", "Voli, diario e condivisione", "#3a9bd5"], ["sal", "💰", "Stipendio", "Busta e obiettivo", "#3fa66b"], ["usc", "🎉", "Uscite", "Agenda, incroci, impegni", "#e0709a"], ["cc", "👥", "Gruppi", "Colleghe e inviti", "#e3a23b"], ["car", "📥", "Carica", "Griglie, foto, variazioni", "#8a6fd1"], ["stats", "📊", "Statistiche", "I tuoi numeri", "#3bb3a8"], ["ntf", nt ? "🔔" : "🔕", "Notifiche", nt ? "Attive su questo telefono" : "Toccala per attivarle", "#d9822b"], ["fb", "💬", window.__isOwner ? "Pareri" : "Dì la tua", window.__isOwner ? "Cosa dicono i tester" : "Scrivi cosa ne pensi", "#5b8def"], ["set", "⚙️", "Impostazioni", "Preferenze e backup", "#7b8794"]];
+  const L = [["me", "🕘", "Turni", "Oggi e griglia del mese", "#7a68d4"], ["st", "📋", "Statini", "Voli, diario e condivisione", "#3a9bd5"], ["sal", "💰", "Stipendio", "Busta e obiettivo", "#3fa66b"], ["usc", "🎉", "Uscite", "Agenda, incroci, impegni", "#e0709a"], ["cc", "👥", "Gruppi", "Colleghe e inviti", "#e3a23b"], ["car", "📥", "Carica", "Griglie, foto, variazioni", "#8a6fd1"], ["stats", "📊", "Statistiche", "I tuoi numeri", "#3bb3a8"], ["ntf", nt ? "🔔" : "🔕", "Notifiche", nt ? "Attive su questo telefono" : "Toccala per attivarle", "#d9822b"], ...(window.__isOwner ? [["inv", "🎟️", "Inviti", "Codici e richieste di accesso", "#c2579a"]] : []), ["fb", "💬", window.__isOwner ? "Pareri" : "Dì la tua", window.__isOwner ? "Cosa dicono i tester" : "Scrivi cosa ne pensi", "#5b8def"], ["set", "⚙️", "Impostazioni", "Preferenze e backup", "#7b8794"]];
   const box = $("tiles"); if (!box) return;
   box.innerHTML = L.filter(x => !["me", "st", "sal", "usc", "cc", "car", "stats"].includes(x[0]) || vis(x[0])).map(x => `<button class="tile" data-go="${x[0]}" style="--t:${x[4]}"><span class="ic">${x[1]}</span><span><b>${x[2]}</b><span class="sb">${x[3]}</span></span></button>`).join("");
   box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { const k = b.dataset.go;
-    if (k === "ntf") return ntfPanel().then(() => {}, () => {}); if (k === "fb") return fbPanel(); if (k === "set") return openSettings();
+    if (k === "inv") { const a = $("admin"); if (a) a.scrollIntoView({ behavior: "smooth", block: "start" }); return; } if (k === "ntf") return ntfPanel().then(() => {}, () => {}); if (k === "fb") return fbPanel(); if (k === "set") return openSettings();
     const tb = document.querySelector(`.tab[data-t="${k}"]`); if (tb) tb.click(); else showTab(k); });
 }
 document.addEventListener("click", ev => { const c = ev.target.closest && ev.target.closest("#tbhome,#qkfoto,#qkman,#qkwho"); if (!c) return;
@@ -4890,7 +4890,7 @@ function unlock() { document.body.classList.remove("locked"); }
 async function gate(db, user) {
   if (!db || !user || !ST.uid) { gateMsg(`<p>Accedi con il tuo account per usare l'app.</p>`); return false; }
   const owner = await user.isOwner();
-  if (owner) { window.__isOwner = true; unlock(); startAdmin(db, user); return true; }
+  if (owner) { window.__isOwner = true; unlock(); try { homeTiles(); } catch (e) {} startAdmin(db, user); return true; }
   return new Promise(resolve => {
     let done = false;
     db.doc("approvati/" + ST.uid).onSnapshot(snap => {
