@@ -2203,6 +2203,9 @@ async function pushSubscribe() {
 }
 async function pushUnsub() { try { const r = await navigator.serviceWorker.ready, sub = await r.pushManager.getSubscription(); if (sub) { const tok = await pushToken(); if (tok) await fetch(PUSH.url.replace(/\/$/, "") + "/unsub", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {}); await sub.unsubscribe(); } } catch (e) {} try { localStorage.removeItem("inturno.pushSub"); } catch {} }
 const PUSHQ = { last: (() => { try { return JSON.parse(localStorage.getItem("inturno.pushLast") || "{}"); } catch { return {}; } })() };
+// avviso alla proprietaria (anche ad app chiusa): non richiede che chi lo manda abbia le notifiche attive
+async function pushToOwner(t, b) { try { if (!PUSH.url) return; const o = await firebase.firestore().doc("config/owner").get(); const ow = o.exists && o.data().uid; if (!ow || ow === ST.uid) return; const tok = await pushToken(); if (!tok) return;
+  await fetch(PUSH.url.replace(/\/$/, "") + "/send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ to: [ow], tipo: "acc", msg: { t, b } }) }); } catch (e) {} }
 async function pushOwner(why) { try { const o = await firebase.firestore().doc("config/owner").get(); if (o.exists && o.data().uid) pushPing([o.data().uid], why); } catch (e) {} }
 async function pushPing(uids, why, sig, msg) {
   if (!pushReady() || !uids || !uids.length) return;
@@ -4836,6 +4839,7 @@ async function redeemCode(db, raw, nome) {
   try { sessionStorage.removeItem("turni.invito"); localStorage.setItem("turni.profilo", N); } catch {}
   P.name = N; URL_CODE = "";
   gateMsg(`<h2>✅ Codice accettato</h2><p>Benvenuta! Sto aprendo l'app…</p>`);
+  try { await Promise.race([pushToOwner("🎟️ Nuova persona nell'app", N.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) + " è entrata con il tuo invito"), new Promise(r => setTimeout(r, 3500))]); } catch (e) {}
   setTimeout(() => { try { location.replace(location.pathname); } catch (e) { location.reload(); } }, 1200);
   return true;
 }
@@ -4949,7 +4953,7 @@ async function showRequest(db) {
   $("gsend").onclick = async () => {
     const n = $("gname").value.trim(); if (n.length < 3) { $("gerr").textContent = "Scrivi nome e cognome."; return; }
     $("gsend").disabled = true;
-    try { await ref.set({ nome: n.toUpperCase(), quando: new Date().toISOString(), stato: "in attesa", email: (ST.user && ST.user.email ? (await ST.user.email()) : "") || "" }); try { localStorage.setItem("turni.profilo", n.toUpperCase()); } catch {} P.name = n.toUpperCase(); showRequest(db); }
+    try { await ref.set({ nome: n.toUpperCase(), quando: new Date().toISOString(), stato: "in attesa", email: (ST.user && ST.user.email ? (await ST.user.email()) : "") || "" }); try { localStorage.setItem("turni.profilo", n.toUpperCase()); } catch {} P.name = n.toUpperCase(); pushToOwner("🔐 Richiesta di accesso", n.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) + " chiede di entrare in InTurno"); showRequest(db); }
     catch (e) { $("gsend").disabled = false; $("gerr").textContent = "Non riesco a inviare la richiesta: riprova tra poco o chiedi a chi gestisce l'app."; }
   };
 }
