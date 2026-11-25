@@ -2222,7 +2222,7 @@ function oggiHtml() {
 
 function helloHtml() { const n = String(P.name || "").split(/[ ,]+/).filter(Boolean); const first = n.length ? n[n.length - 1] : ""; const ini = n.slice(0, 2).map(x => x[0]).join("").toUpperCase();
   const d = new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
-  return `<div class="hello"><div><small>${esc(d.charAt(0).toUpperCase() + d.slice(1))}</small><b>${first ? "Ciao " + esc(first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()) : "InTurno"}</b></div>${ini ? `<div class="av">${esc(ini)}</div>` : ""}</div>`; }
+  return `<div class="hello"><div><small>${first ? "Ciao " + esc(first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()) + " · " : ""}${esc(d.charAt(0).toUpperCase() + d.slice(1))}</small><b>Oggi</b></div>${ini ? `<div class="av">${esc(ini)}</div>` : ""}</div>`; }
 function homeExtra() { try { const t = oggiHtml(); const m = t.match(/<div class="oggiw">[\s\S]*?<\/div>/), k = t.match(/<div class="oggib">[\s\S]*?<\/div>/); return (m ? m[0] : "") + (k ? k[0] : ""); } catch (e) { return ""; } }
 function ticketHtml() {
   if (!P.name || !S.months.length) return `<div class="tkt"><div class="tt"><div class="th"><span>Il tuo turno di oggi</span></div><div class="tb"><span class="muted">Carica i turni del mese per vedere qui il tuo turno.</span></div></div><div class="nt"><hr></div><div class="ts"><div class="bt"><button class="p" data-tk="car">Carica i turni</button></div></div></div>`;
@@ -2241,9 +2241,24 @@ function ticketHtml() {
   return `<div class="tkt"><div class="tt"><div class="th"><span>Il tuo turno di oggi</span>${T ? `<i>${esc(T)}</i>` : ""}</div><div class="tb">${body}</div></div><div class="nt"><hr></div>
     <div class="ts">${stat}${nx ? `<div style="font-size:14px">▶ ${actLine(nx, s0)}</div>` : ""}<div class="bt"><button class="p" data-tk="foto">Statino da foto</button><button data-tk="man" style="flex:.8">A mano</button><button data-tk="who">Chi c'è</button></div></div></div>`;
 }
+
+function statinoOggiHtml() { try { const t0 = new Date(), s0 = ST.list.find(e => e.data === isoDay(t0)); const vs = s0 ? (s0.voli || []).filter(v => v && (v.dalle || v.partenza)).sort((a, b) => String(a.dalle || a.partenza).localeCompare(String(b.dalle || b.partenza))) : [];
+  if (!vs.length) return ""; const hm = `${String(t0.getHours()).padStart(2, "0")}:${String(t0.getMinutes()).padStart(2, "0")}`;
+  return `<div class="hgrp"><span>Il tuo statino di oggi</span><div class="hlist">${vs.map(v => { const past = String(v.alle || v.dalle || v.partenza) < hm; return `<div class="hrow" style="cursor:default;min-height:0;${past ? "opacity:.5" : ""}"><span class="hx"><b style="font-size:15px">${actLine(v, s0)}</b></span></div>`; }).join("")}${s0.pausa ? `<div class="hrow" style="cursor:default;min-height:0"><span class="hx"><span>${pausaLine(s0)}</span></span></div>` : ""}</div></div>`; } catch (e) { return ""; } }
+function collOggiHtml() { try {
+  const t0 = new Date(), live = new Map(stNowList().filter(x => !x.me).map(x => [x.nome, x]));
+  const m = S.months.find(x => x.year === t0.getFullYear() && x.month === t0.getMonth() + 1), key = m && m.key, di = t0.getDate() - 1;
+  const rows = ccMutual().map(x => { const nm = x.d.nome; let c = null; if (m) { const n = findIn(m, nm); if (n) c = codesOf(m, n)[di] || null; }
+    const lv = live.get(nm), mod = !!(x.d.mods && key && (x.d.mods[key] || []).includes(di)); return { nm, c, lv, mod, sh: x.sh }; }).filter(r => r.c && r.c.kind !== "ignoto" && r.c.kind !== "vuoto");
+  const rk = r => r.lv ? 0 : r.c.kind === "lavoro" ? 1 : 2; rows.sort((a, b) => rk(a) - rk(b) || a.nm.localeCompare(b.nm));
+  const first = nm => nm.split(/[ ,]+/).filter(Boolean).slice(-1)[0] || nm;
+  const sub = r => { if (r.c.kind !== "lavoro") return ""; const a = r.lv && (r.lv.cur || r.lv.next); return a ? esc([a.attivita, a.volo].filter(Boolean).join(" ") + (a.gate ? " · gate " + a.gate : "") + (r.lv.T ? " · " + r.lv.T : "")) : ""; };
+  const body = rows.length ? rows.map(r => `<div class="hrow" style="cursor:default;min-height:58px"><span class="hx"><b style="font-size:16px">${esc(first(r.nm).charAt(0).toUpperCase() + first(r.nm).slice(1).toLowerCase())}${r.lv ? ` <span style="color:#2e9d62;font-size:12px">● in turno</span>` : ""}${r.mod ? ` <span style="color:#E8A317;font-size:12px">variazione</span>` : ""}</b><span>${dayLine(r.c)}${sub(r) ? " · " + sub(r) : ""}</span></span></div>`).join("")
+    : `<div class="hrow" style="cursor:default"><span class="hx"><span>Nessuna collega dei tuoi gruppi ha condiviso il turno di oggi.</span></span></div>`;
+  return `<div class="hgrp" id="hcoll"><span>Le colleghe oggi</span><div class="hlist">${body}</div></div>`; } catch (e) { return ""; } }
 function ticketBind() { document.querySelectorAll("[data-tk]").forEach(x => x.onclick = () => { const k = x.dataset.tk; if (k === "car") return document.querySelector('.tab[data-t="car"]').click();
-  document.querySelector('.tab[data-t="st"]').click(); if (k === "foto") $("stfile").click(); else if (k === "man") $("stman").click(); else setTimeout(() => { const m = $("stmap"); if (m) m.scrollIntoView({ behavior: "smooth", block: "start" }); }, 150); }); const b = $("oggibk"); if (b) b.onclick = () => { openSettings("backup"); }; }
-function oggiRender() { const o = $("oggi"); if (!o) return; try { const hh = oggiHtml() + propInHtml(); o.innerHTML = hh; const ho = $("home-oggi"); if (ho) ho.innerHTML = ticketHtml() + propInHtml() + homeExtra(); const hl = $("home-hello"); if (hl) hl.innerHTML = helloHtml(); ticketBind(); propListen(); } catch (e) { o.innerHTML = ""; console.warn(e); }
+  if (k === "who") { const h = $("hcoll"); if (h) h.scrollIntoView({ behavior: "smooth", block: "start" }); return; } document.querySelector('.tab[data-t="st"]').click(); if (k === "foto") $("stfile").click(); else $("stman").click(); }); const b = $("oggibk"); if (b) b.onclick = () => { openSettings("backup"); }; }
+function oggiRender() { const o = $("oggi"); if (!o) return; try { const hh = oggiHtml() + propInHtml(); o.innerHTML = hh; const ho = $("home-oggi"); if (ho) ho.innerHTML = ticketHtml() + statinoOggiHtml() + propInHtml() + collOggiHtml() + homeExtra(); const hl = $("home-hello"); if (hl) hl.innerHTML = helloHtml(); ticketBind(); propListen(); } catch (e) { o.innerHTML = ""; console.warn(e); }
   const b = $("oggibk"); if (b) b.onclick = () => { openSettings("backup"); setTimeout(() => { const s = $("bksec"); if (s) s.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100); }; }
 setInterval(() => { if (["me", "home"].includes(document.body.dataset.tab) && !document.hidden) oggiRender(); }, 120000);
 
@@ -3402,7 +3417,7 @@ function watchGroupData() {
     let sig = "";
     const un = ST.db.collection("gruppi/" + g + "/dati").onSnapshot(snap => {
       const ds = snap.docs.filter(d => d.id !== ST.uid); const s2 = JSON.stringify(ds.map(d => [d.id, d.data()])); if (s2 === sig) return; sig = s2;
-      CC.gdata.set(g, new Map(ds.map(d => [d.id, d.data()]))); ccChanged(); try { notifData(g, CC.gdata.get(g)); } catch (e) {}
+      CC.gdata.set(g, new Map(ds.map(d => [d.id, d.data()]))); ccChanged(); try { if (document.body.dataset.tab === "home") setTimeout(oggiRender, 300); } catch (e) {} try { notifData(g, CC.gdata.get(g)); } catch (e) {}
     }, () => {});
     CC.gsubs.set(g, un);
   }
