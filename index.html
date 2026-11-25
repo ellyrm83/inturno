@@ -4296,7 +4296,7 @@ async function salPdfLines(f) {
   }
   const eng = await ocrEngine(t => { const e = $("salimp"); if (e) e.innerHTML = `<p class="muted">${esc(t)}</p>`; });
   const c = await ocrCanvas(f), txt = await eng.rec(c, 6, "");
-  return String(txt).split(/\n|(?<=\d,\d{2})\s+(?=[A-Za-z])/);
+  return String(txt).replace(/(\d,\d{2})\s+(?=[A-Za-z])/g, "$1\n").split(/\n/);
 }
 function salParseBusta(lines) {
   const num = s => +String(s).replace(/\./g, "").replace(",", "."), N = s => String(s).toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -5139,7 +5139,7 @@ async function saveDraft() {
   ST.draft = null; ST.img = null;
   $("stedit").innerHTML = `<p class="muted">✓ Statino del ${esc(fmtDate(clean.data))} salvato${fw}${warn}. Resta nel Diario voli.</p>`;
   renderStList(); if (S.months.length) renderMe();
-  try { PUSHQ.st = Date.now(); (clean.gruppi || []).forEach(g => { const memb = (CC.groups.get(g) || {}).membri || []; pushPing(memb, "statino:" + g, clean.id + ":" + (clean.salvato || ""), { t: "📋 Statino condiviso", b: `${String(P.name || "Qualcuno").split(/[ ,]+/)[0].replace(/^./, c => c.toUpperCase()).replace(/(?<=.)./g, c => c.toLowerCase())} ha condiviso lo statino${/^T[1-5]$/.test(clean.terminal || "") ? " · Terminal " + clean.terminal[1] : ""}` }); }); } catch (e) {}
+  try { PUSHQ.st = Date.now(); (clean.gruppi || []).forEach(g => { const memb = (CC.groups.get(g) || {}).membri || []; pushPing(memb, "statino:" + g, clean.id + ":" + (clean.salvato || ""), { t: "📋 Statino condiviso", b: `${String(P.name || "Qualcuno").split(/[ ,]+/)[0].replace(/^(.)(.*)$/, (m, a, b) => a.toUpperCase() + b.toLowerCase())} ha condiviso lo statino${/^T[1-5]$/.test(clean.terminal || "") ? " · Terminal " + clean.terminal[1] : ""}` }); }); } catch (e) {}
   try { await statinoToPeople(clean); } catch (e) { console.warn("statino persone", e); }
   publishSoon();
 }
@@ -5149,7 +5149,7 @@ async function statinoToPeople(e) {
   const ref = ST.db.collection("proposte").doc("stat_" + ST.uid.slice(0, 8) + "_" + e.id);
   try { await ref.delete(); } catch (x) {}
   const ids = (e.persone || []).filter(u => u && u !== ST.uid).slice(0, 50); if (!ids.length) return;
-  const nm = String(P.name || "Qualcuno").split(/[ ,]+/)[0].replace(/^./, c => c.toUpperCase()).replace(/(?<=.)./g, c => c.toLowerCase());
+  const nm = String(P.name || "Qualcuno").split(/[ ,]+/)[0].replace(/^(.)(.*)$/, (m, a, b) => a.toUpperCase() + b.toLowerCase());
   const body = `${nm} ha condiviso lo statino${/^T[1-5]$/.test(e.terminal || "") ? " · Terminal " + e.terminal[1] : ""}`;
   await ref.set({ da: ST.uid, daNome: P.name || "", a: ids, tipo: "statino", testo: body, creato: new Date().toISOString(), risposte: {},
     statino: { data: e.data || "", turno: e.turno || "", inizio: e.inizio || "", fine: e.fine || "", terminal: e.terminal || "", pausa: e.pausa || "", voli: (e.voli || []).slice(0, 40), note: e.note || "" } });
