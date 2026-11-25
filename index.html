@@ -4915,7 +4915,19 @@ async function gate(db, user) {
     }, () => gateMsg(`<p>Non riesco a verificare l'accesso. Riprova più tardi.</p>`));
   });
 }
+// link d'invito: appena la persona ha fatto l'accesso entra subito, senza altri passaggi né approvazioni
+async function autoRedeem(db) {
+  try {
+    const iv = await db.doc("inviti/" + URL_CODE).get(); if (!iv.exists || iv.data().usatoDa || iv.data().scade <= Date.now()) return false;
+    let g = ""; try { g = (ST.user && ST.user.name ? await ST.user.name() : "") || ""; } catch (e) {}
+    const n = (/\s/.test(g.trim()) ? g.trim() : (iv.data().nome || g || "").trim());
+    if (n.length < 3) return false;
+    gateMsg(`<h2>🎟️ Invito in corso…</h2><p><span class="busy"></span>Ti faccio entrare.</p>`);
+    return await redeemCode(db, URL_CODE, n);
+  } catch (e) { return false; }
+}
 async function showRequest(db) {
+  if (URL_CODE && !window.__autoTried) { window.__autoTried = true; if (await autoRedeem(db)) return; }
   const ref = db.doc("richieste/" + ST.uid);
   let r = null; try { r = await ref.get(); } catch {}
   if (r && r.exists) {
