@@ -85,6 +85,9 @@
   if (!window.firebase) { localMode("offline"); return; }
   firebase.initializeApp(cfg);
   const auth = firebase.auth(), fs = firebase.firestore(); window.__fs = fs;
+  // reti o browser che bloccano il collegamento "a flusso" (VPN, Relay privato, blocchi pubblicità): passa da solo a quello compatibile
+  try { fs.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) {}
+  window.__gstep = "accesso";
   try { fs.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (e) {}
 
   // ---------- accesso ----------
@@ -105,14 +108,21 @@
   }
   window.__logout = () => auth.signOut().then(() => { try { Object.keys(localStorage).filter(k => k.startsWith("turni.")).forEach(k => localStorage.removeItem(k)); } catch (e) {} location.reload(); });
 
+  // se resta ferma su "Verifica accesso…", dice dove e offre di riprovare
+  setTimeout(() => { try { const b = box(); if (!b || !document.body.classList.contains("locked") || !/Verifica accesso/.test(b.textContent)) return;
+    const st = { accesso: "il login non risponde", proprietaria: "il collegamento ai dati non risponde", app: "l'app non parte" }[window.__gstep] || "il collegamento è lento";
+    b.insertAdjacentHTML("beforeend", `<p class="muted" style="margin-top:10px">Ci sta mettendo troppo: ${st}. Controlla di avere rete o Wi-Fi attivi, spegni VPN o «Relay privato iCloud», e se il link l'hai aperto da WhatsApp o Instagram aprilo in Safari.</p><div class="stbtn" style="margin-top:8px"><button class="btn" id="gretry">Riprova</button><button class="btn ghost" id="gout">Esci e riprova</button></div>`);
+    document.getElementById("gretry").onclick = () => location.reload();
+    document.getElementById("gout").onclick = () => { auth.signOut().catch(() => {}).then(() => { try { Object.keys(localStorage).filter(k => k.startsWith("turni.")).forEach(k => localStorage.removeItem(k)); } catch (e) {} location.reload(); }); }; } catch (e) {} }, 12000);
+
   let started = false;
   auth.onAuthStateChanged(async u => {
     if (!u) { whenDom(() => loginScreen()); return; }
-    if (started) return; started = true;
+    if (started) return; started = true; window.__gstep = "proprietaria";
     // la prima persona che entra diventa la proprietaria (approva le altre)
     let ownerUid = null;
     try {
-      const o = await fs.doc("config/owner").get();
+      const o = await Promise.race([fs.doc("config/owner").get(), new Promise((_, no) => setTimeout(() => no(new Error("timeout")), 9000))]);
       if (o.exists) ownerUid = o.data().uid;
       else { await fs.doc("config/owner").set({ uid: u.uid, creato: new Date().toISOString() }); ownerUid = u.uid; }
     } catch (e) { console.warn("owner", e); }
@@ -129,6 +139,6 @@
       search: async () => [],
     };
     window.__inturno = { use: async n => n === "db" ? db : n === "user" ? user : n === "downloads" ? downloads : null };
-    ready();
+    window.__gstep = "app"; ready();
   });
 })();
