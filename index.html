@@ -1924,10 +1924,29 @@ async function bkRestore(o) {
   Object.entries(o.dati || {}).forEach(([k, v]) => { if (k.startsWith("turni.") || k.startsWith("inturno.")) try { localStorage.setItem(k, v); } catch {} });
   for (const [id, f] of Object.entries(o.foto || {})) { try { await stFotoSave(id, new Blob([bkUnB64(f.d)], { type: f.t })); } catch (e) {} }
 }
+
+// ---- Copie automatiche sul telefono: ogni giorno, alla prima apertura, l'app salva da sola un'istantanea (ultime 7) in un archivio separato.
+// Protegge da cancellazioni o modifiche sbagliate; per la sicurezza contro la perdita del telefono resta il backup cifrato qui sotto.
+const BKA = { db: null, tieni: 7 };
+function bkaDb() { return BKA.db || (BKA.db = new Promise((res, rej) => { const r = indexedDB.open("inturno-bk", 1); r.onupgradeneeded = () => r.result.createObjectStore("snap"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); }
+async function bkaReq(mode, fn) { const db = await bkaDb(); return new Promise((res, rej) => { const t = db.transaction("snap", mode), st = t.objectStore("snap"), rq = fn(st); t.oncomplete = () => res(rq && rq.result); t.onerror = () => rej(t.error); }); }
+async function bkaList() { try { const k = await bkaReq("readonly", st => st.getAllKeys()); return (k || []).sort().reverse(); } catch { return []; } }
+async function bkaSave(nome, forza) {
+  try { const o = await bkCollect(false); if (!Object.keys(o.dati).length) return false;
+    const txt = JSON.stringify(o.dati), ks = await bkaList(), ult = ks[0] && await bkaReq("readonly", st => st.get(ks[0]));
+    if (!forza && ult && ult.txt === txt) return false; // niente di nuovo da salvare
+    await bkaReq("readwrite", st => st.put({ txt, quando: o.quando }, nome));
+    const tutte = await bkaList(); for (const k of tutte.slice(BKA.tieni)) await bkaReq("readwrite", st => st.delete(k));
+    return true; } catch { return false; }
+}
+async function bkaAuto() { try { const oggi = isoDay(new Date()), ks = await bkaList(); if (ks.some(k => k.startsWith(oggi))) return; if (await bkaSave(oggi + " auto")) localStorage.setItem("inturno.ultimaAuto", new Date().toISOString()); } catch {} }
+async function bkaRestore(nome) { const o = await bkaReq("readonly", st => st.get(nome)); if (!o) throw new Error("copia non trovata"); await bkaSave(isoDay(new Date()) + " prima del ripristino", true); const dati = JSON.parse(o.txt); await bkRestore({ dati, foto: {} }); }
+setTimeout(bkaAuto, 5000); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") setTimeout(bkaAuto, 1500); });
 function bkAgo() { let t = null; try { t = localStorage.getItem(BKLAST); } catch {} return t ? Math.floor((Date.now() - new Date(t)) / 86400000) : null; }
 function bkHtml() {
   const ago = bkAgo();
-  return `<div class="setsec" id="bksec"><b>💾 Backup cifrato</b><p class="muted" style="font-size:12px">Una copia di tutto: griglie, modifiche, ferie, impostazioni, <b>stipendio e buste</b>, statini${"" } e, se vuoi, le foto. Il file è protetto da una password che scegli tu: tienila a mente, senza non si può aprire. Salvalo dove preferisci (File, Drive, una chiavetta).</p>
+  const bka = `<div class="setsec"><b>🔄 Copie automatiche</b><p class="muted" style="font-size:12px">Ogni giorno l'app salva da sola una copia dei tuoi dati su questo telefono (le ultime 7). Servono se cancelli o cambi qualcosa per sbaglio. Se perdi il telefono servono invece il backup cifrato qui sotto, da salvare su File o Drive.</p><div id="bkalist" class="muted" style="font-size:12px">Controllo…</div><div id="bkamsg" class="muted"></div></div>`;
+  return bka + `<div class="setsec" id="bksec"><b>💾 Backup cifrato</b><p class="muted" style="font-size:12px">Una copia di tutto: griglie, modifiche, ferie, impostazioni, <b>stipendio e buste</b>, statini${"" } e, se vuoi, le foto. Il file è protetto da una password che scegli tu: tienila a mente, senza non si può aprire. Salvalo dove preferisci (File, Drive, una chiavetta).</p>
     <p class="muted" style="font-size:12px;margin:2px 0">${ago == null ? "Non hai ancora fatto un backup su questo telefono." : ago === 0 ? "Ultimo backup: oggi." : `Ultimo backup: ${ago} giorn${ago === 1 ? "o" : "i"} fa.`}</p>
     <div class="fgrid"><div><label>Password del backup</label><input id="bkpw" type="password" autocomplete="new-password"></div><div><label>Ripeti la password</label><input id="bkpw2" type="password" autocomplete="new-password"></div></div>
     <label class="row" style="gap:6px;margin-top:6px"><input type="checkbox" id="bkfoto" checked> <span>Includi le foto degli statini (il file diventa più grande)</span></label>
@@ -1936,6 +1955,10 @@ function bkHtml() {
 }
 function bkBind(root) {
   const q = s => root.querySelector(s), msg = t => { q("#bkmsg").textContent = t; };
+  (async () => { const box = q("#bkalist"); if (!box) return; const ks = await bkaList(); const am = t => { q("#bkamsg").textContent = t; };
+    if (!ks.length) { box.textContent = "Nessuna copia ancora: la prima si crea da sola alla prossima apertura."; return; }
+    box.innerHTML = `<div class="row" style="gap:6px;margin-top:6px"><select id="bkasel" style="flex:1">${ks.map(k => `<option value="${esc(k)}">${esc(k.replace(/^(\d{4})-(\d\d)-(\d\d)/, "$3/$2/$1"))}</option>`).join("")}</select><button class="btn ghost" id="bkarest">Ripristina</button></div>`;
+    q("#bkarest").onclick = async () => { if (!confirm("Ripristino la copia scelta? Prima salvo una copia dei dati di adesso, così puoi tornare indietro.")) return; try { await bkaRestore(q("#bkasel").value); am("✓ Ripristinato. Ricarico…"); setTimeout(() => location.reload(), 900); } catch (e) { am("Ripristino non riuscito: " + (e && e.message || e)); } }; })();
   q("#bkout").onclick = async () => { const pw = q("#bkpw").value, pw2 = q("#bkpw2").value;
     if (pw.length < 6) return msg("Scegli una password di almeno 6 caratteri."); if (pw !== pw2) return msg("Le due password non coincidono.");
     msg("Preparo il backup…");
