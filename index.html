@@ -269,6 +269,13 @@ body[data-tab=home] .topbar{display:none}
 .subtabs{top:52px!important}
 #prof #pset,#prof #pntf,#prof #pfb{display:none}
 .qk{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}.qk .btn{flex:1 1 auto;text-align:center;padding:12px 10px}
+.sgroup{margin:12px 0 0;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.srow{--t:#7a68d4;display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:12px 14px;border:0;border-top:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.srow:first-child{border-top:0}.srow:active{background:color-mix(in srgb,var(--t) 10%,var(--card))}
+.srow .sic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-size:22px;flex-shrink:0;background:color-mix(in srgb,var(--t) 20%,var(--card))}
+.srow .stx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.srow .stx b{font-size:16px}.srow .stx span{font-size:13px;color:var(--mut)}
+.srow .sch{font-size:26px;color:var(--mut);line-height:1}
+.shead{display:flex;align-items:center;gap:12px;margin-bottom:12px}.shead b{font-size:18px}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 6px}
 .tile{--t:#7a68d4;font:inherit;text-align:left;display:flex;flex-direction:column;gap:10px;min-height:118px;padding:14px;border:1px solid var(--line);border-radius:22px;background:color-mix(in srgb,var(--t) 11%,var(--card));color:var(--ink);cursor:pointer;box-shadow:0 8px 18px -14px rgba(60,40,120,.45)}
 .tile:active{transform:scale(.97)}
@@ -2184,7 +2191,7 @@ function oggiHtml() {
       ${s1 ? `<div class="oggis">▶ ${actLine(stNextAct(s1, "00:00"), s1)}</div>` : ""}</div></div>${warn}${bk}`;
 }
 function oggiRender() { const o = $("oggi"); if (!o) return; try { const hh = oggiHtml() + propInHtml(); o.innerHTML = hh; const ho = $("home-oggi"); if (ho) ho.innerHTML = hh; propListen(); } catch (e) { o.innerHTML = ""; console.warn(e); }
-  const b = $("oggibk"); if (b) b.onclick = () => { openSettings(); setTimeout(() => { const s = $("bksec"); if (s) s.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100); }; }
+  const b = $("oggibk"); if (b) b.onclick = () => { openSettings("backup"); setTimeout(() => { const s = $("bksec"); if (s) s.scrollIntoView({ behavior: "smooth", block: "center" }); }, 100); }; }
 setInterval(() => { if (["me", "home"].includes(document.body.dataset.tab) && !document.hidden) oggiRender(); }, 120000);
 
 // ================= NOTIFICHE AD APP CHIUSA (Web Push gratuito tramite un piccolo servizio Cloudflare) =================
@@ -2650,13 +2657,35 @@ function applySet() { const t = document.querySelector('.tab[data-t="st"]'); if 
   window.__IT_RULES = SET.codici;
   for (const k of ["aperitivo", "cena", "pub"]) if (SET.uscite[k] && OUT[k]) { Object.assign(OUT[k].rule, SET.uscite[k]); OUT[k].when = "dalle " + hhmm(+OUT[k].rule.endBy + 0.5) + " circa"; }
   MARGINE = +SET.margine >= 0 ? +SET.margine : 1; }
-function openSettings() {
+function openSettings(startSec) {
   const box = $("xpanel"); const DN = ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"];
   const SX = JSON.parse(JSON.stringify({ codici: SET.codici, uscite: SET.uscite, paga: SET.paga, margine: SET.margine })); let colX = () => {};
   const R = SET.rot; if (!R.sett.length) R.sett = SCHEMA14.map(([a, b]) => ({ r1: a, r2: b }));
   if (!R.giorni.length) R.giorni = ["L","L","L","L","L","R","R"];
-  const draw = () => {
-    box.innerHTML = `<div class="ovbox"><b>⚙️ Le mie impostazioni</b><p class="muted">Ognuno imposta l'app sulle regole della sua società.</p>
+  let sec = startSec || null, note = "", email = "";
+  try { if (ST.user && ST.user.email) ST.user.email().then(e => { email = e || ""; if (sec === "account") draw(); }, () => {}); } catch (e) {}
+  const SECS = [
+    ["account", "👤", "Account e profilo", "Nome, configurazione guidata, uscita", "#7a68d4"],
+    ["lavoro", "🕘", "Lavoro e turni", "Notturno, buoni pasto, rotazioni, codici", "#3a9bd5"],
+    ["uscite", "🎉", "Uscite e tempo libero", "Regole per uscire, periodo dopo la paga", "#e0709a"],
+    ["notifiche", "🔔", "Notifiche", "Avvisi, anche ad app chiusa", "#d9822b"],
+    ["sicurezza", "🔒", "Sicurezza e privacy", "Blocco con Face ID o codice", "#3fa66b"],
+    ["backup", "💾", "Backup e dati", "Copie automatiche, ripristino, esportazione", "#7b8794"]
+  ];
+  const TIT = Object.fromEntries(SECS.map(x => [x[0], x[2]]));
+  const pagaSec = () => { const p = SX.paga; return `<div class="setsec"><label class="row" style="gap:8px"><input type="checkbox" id="spg" ${p.on ? "checked" : ""}> <b>💰 Periodo preferito dopo la paga</b></label>
+      <div class="fgrid"><div><label>Giorno di paga</label><input id="spd" inputmode="numeric" value="${esc(String(p.giorno))}"></div><div><label>Per quanti giorni dopo</label><input id="spn" inputmode="numeric" value="${esc(String(p.giorni))}"></div></div>
+      <label class="row" style="gap:6px"><input type="checkbox" id="spu" ${p.uscite ? "checked" : ""}> <span class="muted">Uscite</span> <input type="checkbox" id="spv" ${p.viaggi ? "checked" : ""}> <span class="muted">Viaggi e gite</span></label>
+      <p class="muted" style="font-size:12px">Si salva solo il giorno del mese, mai importi. Non è visibile agli altri.</p></div>`; };
+  const accountSec = () => { const ini = String(P.name || "").replace(/,/g, "").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+    return `<div class="setsec"><div class="prof"><div class="av">${esc(ini || "?")}</div><div class="nm2"><span class="muted">${window.__isOwner ? "Proprietaria dell'app" : "Il tuo profilo"}</span><b>${esc(P.name || "Nome non impostato")}</b><span class="muted">${esc(email)}</span></div></div>
+      <div class="stbtn" style="margin-top:10px"><button class="btn ghost" id="sacnm">Cambia il nome del profilo</button></div>
+      <p class="muted" style="font-size:12px">Il nome deve essere uguale a come compare nei fogli turni, così l'app ti trova.</p></div>
+      <div class="setsec"><b>🧭 Configurazione guidata</b><p class="muted" style="font-size:12px">Rifai i passaggi iniziali: tipo di lavoro, turni e regole.</p><button class="btn ghost" id="swiz">Rifai la configurazione guidata</button></div>
+      ${window.__logout ? `<div class="setsec"><b>🚪 Esci dall'account</b><p class="muted" style="font-size:12px">Esci da questo telefono. I dati salvati online restano e li ritrovi accedendo di nuovo.</p><button class="btn ghost" id="sout">Esci dall'account</button></div>` : ""}`; };
+  const body = () => ({
+    account: accountSec,
+    lavoro: () => `<p class="muted" style="margin-top:0">Ognuno imposta l'app sulle regole della sua società.</p>
     <div class="setsec"><label class="row" style="gap:8px"><input type="checkbox" id="snot" ${SET.notturno ? "checked" : ""}> <b>🌙 Ore di notturno</b></label>
       <div class="fgrid"><div><label>Dalle</label><input type="time" id="snda" value="${esc(SET.nDa)}"></div><div><label>Alle</label><input type="time" id="sna" value="${esc(SET.nA)}"></div></div></div>
     <div class="setsec"><label class="row" style="gap:8px"><input type="checkbox" id="sbuo" ${SET.buoni ? "checked" : ""}> <b>🍽️ Buoni pasto</b></label>
@@ -2673,21 +2702,49 @@ function openSettings() {
       ${R.mode === "pax14" ? `<p class="muted" style="font-size:12px">Schema PAX NEW a 14 settimane.</p>` : ""}</div>
     <div class="setsec"><b>🏖️ Rotazione ferie</b><div class="row"><span class="muted">Il periodo cambia ogni</span><input id="sfo" inputmode="numeric" value="${esc(String(SET.ferieOgni || 1))}" style="width:60px"><span class="muted">anni</span></div>
       <p class="muted" style="font-size:12px">I periodi si impostano in Turni → 🏖️ Ferie e rotazione ferie.</p></div>
-    ${setExtraHtml(SX)}
-    ${contHtml()}${lkPanelHtml()}${bkHtml()}
-    <div class="stbtn" style="margin-top:10px"><button class="btn" id="setok">Salva impostazioni</button><button class="btn ghost" id="setx">Chiudi</button></div></div>`;
-    lkPanelBind(box); bkBind(box); contBind(box);
-    const col = () => { SET.notturno = $("snot").checked; SET.nDa = $("snda").value || "20:00"; SET.nA = $("sna").value || "08:00"; SET.buoni = $("sbuo").checked; SET.buonoOre = parseFloat(String($("sbore").value).replace(",", ".")) || 6; SET.buonoEuro = $("sbeur").value.trim(); SET.statini = $("sstat").checked; SET.ferieOgni = Math.max(1, parseInt($("sfo").value) || 1);
-      if ($("snw")) { const n = Math.min(30, Math.max(1, parseInt($("snw").value) || 1)); while (R.sett.length < n) R.sett.push({ r1: null, r2: null }); R.sett.length = n; }
-      if ($("snd")) { const n = Math.min(60, Math.max(2, parseInt($("snd").value) || 7)); while (R.giorni.length < n) R.giorni.push("L"); R.giorni.length = n; } };
-    colX = bindSetExtra(box, SX);
+      <div class="setsec"><b>🔤 Come si leggono i tuoi codici</b><div id="sxcod">${codiciHtml(SX.codici)}</div></div>
+      ${contHtml()}`,
+    uscite: () => `<div class="setsec"><b>🍽️ Le mie regole per uscire</b><p class="muted" style="font-size:12px">Valgono per le proposte di uscite.</p>${usciteHtml(SX.uscite, SX.margine)}</div>${pagaSec()}`,
+    sicurezza: () => lkPanelHtml(),
+    backup: () => bkHtml()
+  })[sec];
+  const col = () => {
+    if ($("snot")) { SET.notturno = $("snot").checked; SET.nDa = $("snda").value || "20:00"; SET.nA = $("sna").value || "08:00"; SET.buoni = $("sbuo").checked; SET.buonoOre = parseFloat(String($("sbore").value).replace(",", ".")) || 6; SET.buonoEuro = $("sbeur").value.trim(); SET.statini = $("sstat").checked; SET.ferieOgni = Math.max(1, parseInt($("sfo").value) || 1); }
+    if ($("snw")) { const n = Math.min(30, Math.max(1, parseInt($("snw").value) || 1)); while (R.sett.length < n) R.sett.push({ r1: null, r2: null }); R.sett.length = n; }
+    if ($("snd")) { const n = Math.min(60, Math.max(2, parseInt($("snd").value) || 7)); while (R.giorni.length < n) R.giorni.push("L"); R.giorni.length = n; } };
+  const bindSX = () => {
+    const redraw = () => { const c = box.querySelector("#sxcod"); c.innerHTML = codiciHtml(SX.codici); colC = bindCodici(c, SX.codici, redraw); };
+    let colC = () => {}; const cx = box.querySelector("#sxcod"); if (cx) colC = bindCodici(cx, SX.codici, redraw);
+    return () => { colC(); if (box.querySelector("#usm")) { collectUscite(box, SX.uscite); SX.margine = +box.querySelector("#usm").value; }
+      if (box.querySelector("#spg")) { SX.paga.on = box.querySelector("#spg").checked; SX.paga.giorno = Math.min(31, Math.max(1, parseInt(box.querySelector("#spd").value) || 27)); SX.paga.giorni = Math.min(31, Math.max(1, parseInt(box.querySelector("#spn").value) || 14)); SX.paga.uscite = box.querySelector("#spu").checked; SX.paga.viaggi = box.querySelector("#spv").checked; } };
+  };
+  const draw = () => {
+    if (!sec) {
+      box.innerHTML = `<div class="ovbox"><b style="font-size:18px">⚙️ Impostazioni</b>${note ? `<p class="muted" style="margin:6px 0 0">${note}</p>` : ""}
+        <div class="sgroup">${SECS.map(x => `<button class="srow" data-sec="${x[0]}" style="--t:${x[4]}"><span class="sic">${x[1]}</span><span class="stx"><b>${x[2]}</b><span>${x[3]}</span></span><span class="sch">›</span></button>`).join("")}</div>
+        <div class="stbtn" style="margin-top:12px"><button class="btn ghost" id="setx">Chiudi</button></div></div>`;
+      box.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => { const k = b.dataset.sec; if (k === "notifiche") { ntfPanel(); return; } sec = k; note = ""; draw(); });
+      $("setx").onclick = () => { box.innerHTML = ""; };
+      box.scrollIntoView({ behavior: "smooth", block: "start" }); return;
+    }
+    const editable = sec === "lavoro" || sec === "uscite";
+    box.innerHTML = `<div class="ovbox"><div class="shead"><button class="mini" id="sback">‹ Impostazioni</button><b>${TIT[sec]}</b></div>${body()()}
+      ${editable ? `<div class="stbtn" style="margin-top:12px"><button class="btn" id="setok">Salva</button><button class="btn ghost" id="sback2">Indietro</button></div>` : ""}</div>`;
+    if (sec === "sicurezza") lkPanelBind(box); if (sec === "backup") bkBind(box); if (sec === "lavoro") contBind(box);
+    colX = bindSX();
+    if (sec === "account") {
+      if ($("sacnm")) $("sacnm").onclick = () => { box.innerHTML = ""; P.editing = true; try { renderProf(); } catch (e) {} try { showTab("home"); } catch (e) {} };
+      if ($("swiz")) $("swiz").onclick = () => { box.innerHTML = ""; openWizard(); };
+      if ($("sout")) $("sout").onclick = () => { const b = $("sout"); if (!b.dataset.c) { b.dataset.c = 1; b.textContent = "Conferma: esci"; return; } window.__logout(); };
+    }
     box.querySelectorAll("[data-rm]").forEach(c => c.onclick = () => { colX(); col(); R.mode = c.dataset.rm; draw(); });
     box.querySelectorAll("[data-rw]").forEach(c => c.onclick = () => { colX(); col(); const r = R.sett[+c.dataset.rw], d = +c.dataset.rd;
       if (+r.r1 === d) { r.r1 = null; r.r2 = d; } else if (+r.r2 === d) { r.r2 = null; } else if (r.r1 == null) r.r1 = d; else r.r2 = d; draw(); });
     box.querySelectorAll("[data-dg]").forEach(c => c.onclick = () => { colX(); col(); const k = +c.dataset.dg; R.giorni[k] = R.giorni[k] === "R" ? "L" : "R"; draw(); });
     if ($("snw")) $("snw").onchange = () => { colX(); col(); draw(); }; if ($("snd")) $("snd").onchange = () => { colX(); col(); draw(); };
-    $("setx").onclick = () => { box.innerHTML = ""; };
-    $("setok").onclick = async () => { colX(); col(); Object.assign(SET, SX); await saveSet(); box.innerHTML = `<p class="muted">✓ Impostazioni salvate.</p>`; };
+    const back = () => { colX(); col(); sec = null; draw(); };
+    $("sback").onclick = back; if ($("sback2")) $("sback2").onclick = back;
+    if ($("setok")) $("setok").onclick = async () => { colX(); col(); Object.assign(SET, SX); await saveSet(); sec = null; note = "✓ Impostazioni salvate."; draw(); };
     box.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   draw();
