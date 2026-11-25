@@ -9,4 +9,4 @@ window.INTURNO_FIREBASE = {
 };
 
 // Avvisi ad app chiusa: indirizzo del servizio Cloudflare (vuoto = non attivo). La chiave qui sotto è quella pubblica: non è un segreto.
-window.INTURNO_PUSH = { url: "", vapid: "BBTUzMWoyTC-LeB6DTPjs3oBImgPkuVyoTTpyBMS-SmOyzkS1n76aXPTlIB76EGy9X6isGdVQN1JAViXZFVYbN0" };
+window.INTURNO_PUSH = { url: "https://inturno-push.e-piersantelli.workers.dev", vapid: "BBTUzMWoyTC-LeB6DTPjs3oBImgPkuVyoTTpyBMS-SmOyzkS1n76aXPTlIB76EGy9X6isGdVQN1JAViXZFVYbN0" };
