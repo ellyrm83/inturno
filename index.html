@@ -1470,7 +1470,7 @@ async function fbPanel() {
   $("fbx").onclick = chiudi;
   $("fbst").onclick = e => { const t = e.target.closest("[data-fbs]"); if (!t) return; voto = +t.dataset.fbs; $("fbst").querySelectorAll("[data-fbs]").forEach(x => { x.style.opacity = +x.dataset.fbs <= voto ? 1 : .35; }); };
   $("fbgo").onclick = async () => { const testo = $("fbt").value.trim(); if (testo.length < 3) { $("fbm").textContent = "Scrivi qualcosa prima di inviare."; return; }
-    try { await ST.db.collection("feedback").add({ testo, voto, nome: $("fbn").checked ? (P.name || "") : "", creato: Date.now(), letto: false, v: 1 }); box.innerHTML = `<div class="ovbox"><b>Grazie! 🙏</b><p class="muted">Il tuo parere è arrivato.</p><button class="btn ghost" id="fbx">Chiudi</button></div>`; $("fbx").onclick = chiudi; }
+    try { await ST.db.collection("feedback").add({ testo, voto, nome: $("fbn").checked ? (P.name || "") : "", creato: Date.now(), letto: false, v: 1 }); pushOwner("parere"); box.innerHTML = `<div class="ovbox"><b>Grazie! 🙏</b><p class="muted">Il tuo parere è arrivato.</p><button class="btn ghost" id="fbx">Chiudi</button></div>`; $("fbx").onclick = chiudi; }
     catch (e) { $("fbm").textContent = "Non sono riuscita a inviarlo: riprova tra poco."; } };
 }
 function ntfBtnLabel() { return typeof Notification === "undefined" ? "🔕 Notifiche" : ntfOn() ? "🔔 Notifiche attive" : "🔕 Attiva notifiche"; }
@@ -2161,6 +2161,7 @@ async function pushSubscribe() {
 }
 async function pushUnsub() { try { const r = await navigator.serviceWorker.ready, sub = await r.pushManager.getSubscription(); if (sub) { const tok = await pushToken(); if (tok) await fetch(PUSH.url.replace(/\/$/, "") + "/unsub", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {}); await sub.unsubscribe(); } } catch (e) {} try { localStorage.removeItem("inturno.pushSub"); } catch {} }
 const PUSHQ = { last: (() => { try { return JSON.parse(localStorage.getItem("inturno.pushLast") || "{}"); } catch { return {}; } })() };
+async function pushOwner(why) { try { const o = await firebase.firestore().doc("config/owner").get(); if (o.exists && o.data().uid) pushPing([o.data().uid], why); } catch (e) {} }
 async function pushPing(uids, why, sig) {
   if (!pushReady() || !uids || !uids.length) return;
   if (sig != null) { if (PUSHQ.last[why] === sig) return; PUSHQ.last[why] = sig; try { localStorage.setItem("inturno.pushLast", JSON.stringify(PUSHQ.last)); } catch {} }
