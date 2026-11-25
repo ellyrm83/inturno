@@ -1,0 +1,14 @@
+{
+  // Configurazione del servizio avvisi di InTurno: Cloudflare la legge da GitHub e pubblica il servizio da solo.
+  "name": "inturno-push",
+  "main": "push-worker.js",
+  "compatibility_date": "2025-01-01",
+  "workers_dev": true,
+  "vars": {
+    "VAPID_PUBLIC": "BBTUzMWoyTC-LeB6DTPjs3oBImgPkuVyoTTpyBMS-SmOyzkS1n76aXPTlIB76EGy9X6isGdVQN1JAViXZFVYbN0",
+    "PROJECT_ID": "inturno-f5504",
+    "ORIGIN": "https://ellyrm83.github.io"
+  },
+  // l'archivio delle iscrizioni viene creato da Cloudflare alla prima pubblicazione
+  "kv_namespaces": [{ "binding": "SUBS" }]
+}
