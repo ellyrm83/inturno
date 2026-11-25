@@ -4092,17 +4092,19 @@ function salObBlock(a, m) {
   if (!pl.length) return `<div class="salko"><div class="salcd"><span>Mancano</span><b>${eur0(manca)}</b><span>netti a ${eur0(ob)}</span></div><p class="muted" style="font-size:12px">Inserisci la paga oraria per vedere quante ore servono.</p></div>`;
   SAL.__mixKey = m.key; const mix = salMix(m, pl, manca), M = SAL.mesi[m.key].mix, tot = mix.reduce((s, x) => s + (x.on ? x.h * x.perH : 0), 0), ok = tot >= manca - 0.5;
   return `<div class="salko"><div class="salcd"><span>Mancano</span><b>${eur0(manca)}</b><span>netti a ${eur0(ob)}</span></div>
-    <p class="muted" style="font-size:12px;margin:6px 0">${a.prevM ? "Ore da fare nei giorni di " + esc(MESI_L[a.prevM.month - 1]) + " (quelli ancora da lavorare) per la busta di " + esc(MESI_L[m.month - 1]) + ". " : ""}Spunta come vuoi arrivarci. Le ore si dividono tra le voci spuntate; usa − e + per spostarle da una voce all'altra, le altre si adattano.</p>
+    <div style="font-weight:800;font-size:14px;margin:8px 0 2px">📋 Proposta: ore ancora da fare</div>
+    <p class="muted" style="font-size:12px;margin:0 0 4px"><b>Non sono ore dei tuoi turni.</b> Sono quelle che servirebbero in più per colmare i ${eur0(manca)} che mancano. ${a.ordH || a.strH || a.mrH ? `Già contate nel netto qui sopra: ${[a.ordH ? hfx(a.ordH) + " h allungo" : "", a.strH ? hfx(a.strH) + " h straordinario" : "", a.mrH ? hfx(a.mrH) + " h mancato riposo" : ""].filter(Boolean).join(", ")}.` : "Nel netto qui sopra non c'è nessuna ora in più."} Quando segni un'ora in più nel calendario, passa dalla proposta al netto e la proposta si accorcia da sola.</p>
+    <p class="muted" style="font-size:12px;margin:0 0 6px">${a.prevM ? "Vanno fatte nei giorni di " + esc(MESI_L[a.prevM.month - 1]) + " ancora da lavorare (si pagano nella busta di " + esc(MESI_L[m.month - 1]) + "). " : ""}Ho scelto la voce più conveniente; spuntane altre per dividere le ore, − e + le spostano.</p>
     <div class="mxl">${mix.map(x => `<div class="mxr ${x.on ? "" : "off"}"><label class="mxc"><input type="checkbox" data-mxon="${esc(x.k)}" ${x.on ? "checked" : ""}><span>${esc(x.l)}<br><span class="muted">≈ ${eur(x.perH)} netti l'ora${x.disp != null ? ` · disponibili ${hfx(x.disp)} h` : ""}</span></span></label>
-      ${x.on ? `<div class="mxh"><button class="mini" data-mxd="${esc(x.k)}" data-v="-0.5">−</button><b class="${(M[x.k] || {}).lock ? "lk" : ""}">${hfx(x.h)} h</b><button class="mini" data-mxd="${esc(x.k)}" data-v="0.5">+</button></div>` : ""}</div>`).join("")}</div>
-    <div class="mxt ${ok ? "ok" : ""}">${ok ? "✓" : "…"} Con queste ore: <b>+${eur0(tot)}</b> → netto previsto <b>${eur0(a.netto + tot)}</b>${ok ? "" : ` · mancano ancora ${eur0(manca - tot)}`}</div>
-    ${Object.values(M).some(v => v.lock || v.on === false) ? `<button class="mini" data-mxr="1" style="margin-top:6px">↺ Ridistribuisci da capo</button>` : ""}
+      ${x.on ? `<div class="mxh"><span class="muted" style="font-size:11px">da fare</span><button class="mini" data-mxd="${esc(x.k)}" data-v="-0.5">−</button><b class="${(M[x.k] || {}).lock ? "lk" : ""}">${hfx(x.h)} h</b><button class="mini" data-mxd="${esc(x.k)}" data-v="0.5">+</button></div>` : ""}</div>`).join("")}</div>
+    <div class="mxt ${ok ? "ok" : ""}">${ok ? "✓" : "…"} Se fai queste ore: <b>+${eur0(tot)}</b> → netto previsto <b>${eur0(a.netto + tot)}</b>${ok ? "" : ` · mancano ancora ${eur0(manca - tot)}`}</div>
+    ${Object.values(M).some(v => v.lock || v.on !== undefined) ? `<button class="mini" data-mxr="1" style="margin-top:6px">↺ Ridistribuisci da capo</button>` : ""}
     <p class="muted" style="font-size:11px;margin:4px 0 0">Stima: le ore vere le segni giorno per giorno sul calendario, e il conto si aggiorna.</p></div>`;
 }
 // ripartisce l'importo mancante tra le voci spuntate; quelle toccate a mano restano ferme
 function salMix(m, pl, manca) {
   SAL.mesi[m.key] = SAL.mesi[m.key] || {}; const M = SAL.mesi[m.key].mix = SAL.mesi[m.key].mix || {};
-  const R = pl.map(x => { const k = x.l.slice(0, 24), st = M[k] || {}; return { k, l: x.l, perH: x.perH, disp: x.disp, on: st.on !== false, lock: !!st.lock, h: st.lock ? nz(st.h) : 0 }; });
+  const def = pl.findIndex(x => x.disp == null || x.disp > 0), R = pl.map((x, i) => { const k = x.l.slice(0, 24), st = M[k] || {}; return { k, l: x.l, perH: x.perH, disp: x.disp, on: st.on === undefined ? i === def : st.on, lock: !!st.lock, h: st.lock ? nz(st.h) : 0 }; });
   let rest = manca - R.filter(x => x.on && x.lock).reduce((s, x) => s + x.h * x.perH, 0);
   let free = R.filter(x => x.on && !x.lock);
   for (let it = 0; it < 6 && free.length && rest > 0.5; it++) {
