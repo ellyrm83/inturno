@@ -1050,7 +1050,7 @@ function applyOv(c, o) {
   if (o.tipo === "variazione") {
     const st = tH(o.inizio), en0 = tH(o.fine); if (st == null || en0 == null) return c;
     const en = en0 <= st ? en0 + 24 : en0;
-    return { kind: "lavoro", label: (c.kind === "lavoro" ? c.label : "VAR") + "*", start: st, end: en, hours: en - st, night: nightOf(st, en), mod: o };
+    return { kind: "lavoro", label: o.mr ? "M" + o.mr : (c.kind === "lavoro" ? c.label : "VAR") + "*", start: st, end: en, hours: en - st, night: nightOf(st, en), mod: o };
   }
   if (o.tipo === "permesso") {
     const ore = parseFloat(String(o.ore || "").replace(",", ".")) || 0;
@@ -1092,13 +1092,13 @@ function openOv(m, name, i, keep) {
     box.innerHTML = `<div class="ovbox"><b style="text-transform:capitalize">${esc(d)}</b> ${(() => { const c = applyOv(orig, cur); const tipo = c.kind === "lavoro" ? "Lavoro" : c.kind === "riposo" ? "Riposo " + (c.label || "") : c.kind === "ferie" ? "Ferie" : c.kind === "assenza" ? c.label : c.kind === "off" ? "OFF" : c.kind === "altro" ? "Codice non riconosciuto" : "Da definire";
         const stato = cur ? "Modificato" : orig.pred ? "Previsto" : (orig.kind === "vuoto" || orig.kind === "ignoto") ? "Da definire" : "Confermato"; const raw = (m.people.get(name) || [])[i] || "";
         return `<div class="detail"><span>Tipo: <b>${esc(tipo)}</b></span>${c.kind === "lavoro" ? `<span>Orario: <b>${hhmm(c.start)}–${hhmm(c.end)}</b></span><span>Durata: <b>${String(Math.round(c.hours * 100) / 100).replace(".", ",")} h</b></span>` : ""}<span>Codice originale: <b>${esc(raw && raw[0] !== "@" && raw !== "?" ? raw.replace("~", "") : "—")}</b></span><span>Stato: <b>${stato}</b></span>${cur && shortC(orig) && shortC(orig) !== shortC(c) ? `<span>ISO (al posto di): <b>${esc(shortC(orig))}</b></span>` : ""}</div>`; })()}
-      <div class="ovtypes">${Object.entries(OVT).map(([t, o]) => `<span class="chip ${draft.tipo === t ? "sel" : ""}" data-t="${t}">${o.label}</span>`).join("")}</div>
+      <div class="ovtypes">${Object.entries(Object.assign({}, { cambio: OVT.cambio, variazione: OVT.variazione, mr1: { label: "🔁 Mancato R1" }, mr2: { label: "🔁 Mancato R2" } }, OVT)).map(([t, o]) => `<span class="chip ${(t === "mr1" ? draft.tipo === "variazione" && draft.mr === "R1" : t === "mr2" ? draft.tipo === "variazione" && draft.mr === "R2" : t === "variazione" ? draft.tipo === "variazione" && !draft.mr : draft.tipo === t) ? "sel" : ""}" data-t="${t}">${o.label}</span>`).join("")}</div>
       ${draft.tipo === "cambio" ? `<div class="fgrid"><div class="full"><label>Nuovo turno: un codice (F23, R1, FER) oppure un orario (08:00-14:00)</label><input id="ovc" value="${esc(draft.codice || "")}" placeholder="F23 oppure 08:00-14:00" autocapitalize="characters" autocomplete="off"></div></div><div class="muted" id="ovprev"></div>` : ""}
       ${draft.tipo === "permesso" ? `<div class="fgrid"><div><label>Ore di permesso</label><input id="ovo" inputmode="decimal" value="${esc(draft.ore || "")}" placeholder="1"></div><div><label>Quando</label><select id="ovw" style="width:100%"><option value="fine" ${draft.dove !== "inizio" ? "selected" : ""}>Esco prima</option><option value="inizio" ${draft.dove === "inizio" ? "selected" : ""}>Entro dopo</option></select></div></div><div class="muted" id="ovprev"></div>` : ""}
       ${draft.tipo === "variazione" ? `<div class="fgrid"><div><label>Inizio</label><input type="time" id="ovi" value="${esc(draft.inizio || "")}"></div><div><label>Fine</label><input type="time" id="ovf" value="${esc(draft.fine || "")}"></div></div><div class="muted" id="ovprev"></div>` : ""}
       ${typeof salOvHtml === "function" ? salOvHtml(m, name, i) : ""}<div class="fgrid"><div class="full"><label>Nota (es. con chi hai cambiato, protocollo del certificato)</label><input id="ovn" value="${esc(draft.nota || "")}"></div></div>
       <div class="stbtn" style="margin-top:10px"><button class="btn" id="ovsave">Salva</button>${cur ? `<button class="btn ghost" id="ovdel">Ripristina originale</button>` : ""}<button class="btn ghost" id="ovx">Chiudi</button></div></div>`;
-    box.querySelectorAll("[data-t]").forEach(c => c.onclick = () => { draft.tipo = c.dataset.t; draw(); });
+    box.querySelectorAll("[data-t]").forEach(c => c.onclick = () => { const t = c.dataset.t; if (t === "mr1" || t === "mr2") { draft.tipo = "variazione"; draft.mr = t === "mr1" ? "R1" : "R2"; } else { draft.tipo = t; delete draft.mr; } draw(); });
     const prev = () => { const p = $("ovprev"); if (!p) return; const r = applyOv(orig, draft);
       const fx = x => (Math.round((x || 0) * 100) / 100).toString().replace(".", ",");
       p.textContent = r.kind === "lavoro" ? `→ ${fmtHH(r.start)}–${fmtHH(r.end)} · ${fx(r.hours)} h · notturno ${fx(r.night)} h · buono pasto: ${r.hours >= 6 ? "sì" : "no"}` : r.label ? `→ ${r.label} · buono pasto: no` : ""; };
@@ -1116,7 +1116,7 @@ function openOv(m, name, i, keep) {
       if (draft.tipo === "variazione" && (!draft.inizio || !draft.fine)) return;
       const o = { tipo: draft.tipo, nota: draft.nota || "" };
       if (draft.tipo === "cambio") o.codice = draft.codice;
-      if (draft.tipo === "variazione") { o.inizio = draft.inizio; o.fine = draft.fine; }
+      if (draft.tipo === "variazione") { o.inizio = draft.inizio; o.fine = draft.fine; if (draft.mr) o.mr = draft.mr; }
       if (draft.tipo === "permesso") { if (!(parseFloat(String(draft.ore || "").replace(",", ".")) > 0)) { $("ovo").focus(); return; } o.ore = draft.ore; o.dove = draft.dove || "fine"; }
       OV[k] = o; S.ovOpen = null; S.ovTyping = false; await saveOv(); renderAll();
     };
@@ -3941,7 +3941,7 @@ function salMeseRaw(m, opt) {
         baseH = c.hours - autoIv.reduce((s, v) => s + v[1] - v[0], 0); } }
     const autoH = autoIv.reduce((s, v) => s + v[1] - v[0], 0);
     // giorno di riposo (R1/R2) trasformato in turno: "mancato riposo", pagato con la sua percentuale invece che come turno del fisso
-    let mrLab = null; if (c && c.kind === "lavoro" && c.mod) { const o0 = origOf(m, name, i); if (o0 && o0.kind === "riposo") mrLab = /2/.test(String(o0.label)) ? "R2" : /1/.test(String(o0.label)) ? "R1" : "R"; }
+    let mrLab = null; if (c && c.kind === "lavoro" && c.mod && c.mod.mr) mrLab = c.mod.mr; else if (c && c.kind === "lavoro" && c.mod) { const o0 = origOf(m, name, i); if (o0 && o0.kind === "riposo") mrLab = /2/.test(String(o0.label)) ? "R2" : /1/.test(String(o0.label)) ? "R1" : "R"; }
     if (mrLab) { baseH = soglia; autoIv = []; }
     const row = { i, dt, c, piu: Math.round((X.piu + autoH) * 100) / 100, dove: X.dove, ord: 0, str: 0, xNott: 0, nott: 0, dom: 0, fest: 0, buono: false };
     // per "maturato a oggi": oggi conta solo fino all'ora attuale (opt.ora), i giorni passati per intero
@@ -4090,7 +4090,7 @@ function salObBlock(a, m) {
   if (manca <= 0) return `<div class="salok">🎯 Obiettivo raggiunto: <b>${eur0(a.netto)}</b> su ${eur0(ob)}${manca < -0.5 ? ` (+${eur0(-manca)})` : ""}.</div>`;
   const pl = salPiano(a, manca, m);
   if (!pl.length) return `<div class="salko"><div class="salcd"><span>Mancano</span><b>${eur0(manca)}</b><span>netti a ${eur0(ob)}</span></div><p class="muted" style="font-size:12px">Inserisci la paga oraria per vedere quante ore servono.</p></div>`;
-  SAL.__mixKey = m.key; const mix = salMix(m, pl, manca), M = SAL.mesi[m.key].mix, tot = mix.reduce((s, x) => s + (x.on ? x.h * x.perH : 0), 0), ok = tot >= manca - 0.5;
+  SAL.__mixKey = m.key; SAL.__manca = Math.round(manca); const mix = salMix(m, pl, manca), M = SAL.mesi[m.key].mix, tot = mix.reduce((s, x) => s + (x.on ? x.h * x.perH : 0), 0), ok = tot >= manca - 0.5;
   return `<div class="salko"><div class="salcd"><span>Mancano</span><b>${eur0(manca)}</b><span>netti a ${eur0(ob)}</span></div>
     <div style="font-weight:800;font-size:14px;margin:8px 0 2px">📋 Proposta: ore ancora da fare</div>
     <p class="muted" style="font-size:12px;margin:0 0 4px"><b>Non sono ore dei tuoi turni.</b> Sono quelle che servirebbero in più per colmare i ${eur0(manca)} che mancano. ${a.ordH || a.strH || a.mrH ? `Già contate nel netto qui sopra: ${[a.ordH ? hfx(a.ordH) + " h allungo" : "", a.strH ? hfx(a.strH) + " h straordinario" : "", a.mrH ? hfx(a.mrH) + " h mancato riposo" : ""].filter(Boolean).join(", ")}.` : "Nel netto qui sopra non c'è nessuna ora in più."} Quando segni un'ora in più nel calendario, passa dalla proposta al netto e la proposta si accorcia da sola.</p>
@@ -4104,7 +4104,7 @@ function salObBlock(a, m) {
 // ripartisce l'importo mancante tra le voci spuntate; quelle toccate a mano restano ferme
 function salMix(m, pl, manca) {
   SAL.mesi[m.key] = SAL.mesi[m.key] || {}; const M = SAL.mesi[m.key].mix = SAL.mesi[m.key].mix || {};
-  const def = pl.findIndex(x => x.disp == null || x.disp > 0), R = pl.map((x, i) => { const k = x.l.slice(0, 24), st = M[k] || {}; return { k, l: x.l, perH: x.perH, disp: x.disp, on: st.on === undefined ? i === def : st.on, lock: !!st.lock, h: st.lock ? nz(st.h) : 0 }; });
+  const def = pl.findIndex(x => x.disp == null || x.disp > 0), R = pl.map((x, i) => { const k = x.l.slice(0, 24), st = M[k] || {}; return { k, l: x.l, perH: x.perH, disp: x.disp, on: st.on === undefined ? i === def : st.on, lock: !!st.lock && st.mk === Math.round(manca), h: st.lock && st.mk === Math.round(manca) ? nz(st.h) : 0 }; });
   let rest = manca - R.filter(x => x.on && x.lock).reduce((s, x) => s + x.h * x.perH, 0);
   let free = R.filter(x => x.on && !x.lock);
   for (let it = 0; it < 6 && free.length && rest > 0.5; it++) {
@@ -4119,7 +4119,7 @@ function salMixAct(t) {
   const M = SAL.mesi[k].mix = SAL.mesi[k].mix || {};
   if (t.dataset.mxr) { SAL.mesi[k].mix = {}; }
   else if (t.dataset.mxon) { const st = M[t.dataset.mxon] = M[t.dataset.mxon] || {}; st.on = t.checked; if (!t.checked) st.lock = false; Object.keys(M).forEach(k2 => { if (k2 !== t.dataset.mxon) M[k2].lock = false; }); } // cambiando le voci spuntate le ore si ricalcolano da sole
-  else if (t.dataset.mxd) { const st = M[t.dataset.mxd] = M[t.dataset.mxd] || {}, cur = nz((t.parentNode.querySelector("b") || {}).textContent); st.h = Math.max(0, cur + (+t.dataset.v)); st.lock = true; st.on = true; }
+  else if (t.dataset.mxd) { const st = M[t.dataset.mxd] = M[t.dataset.mxd] || {}, cur = nz((t.parentNode.querySelector("b") || {}).textContent); st.h = Math.max(0, cur + (+t.dataset.v)); st.lock = true; st.mk = SAL.__manca; st.on = true; }
   salSave(); renderSal();
 }
 document.addEventListener("click", e => { const t = e.target.closest && e.target.closest("[data-mxd],[data-mxr]"); if (t) { e.preventDefault(); salMixAct(t); } });

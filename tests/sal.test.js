@@ -117,3 +117,10 @@ test("ore di allungo ancora disponibili: contano solo i giorni da oggi in poi, a
   vicino(api2.salMese(pass2).dispFut, 0, "mese passato: nessuna ora disponibile");
   vicino(nuovo().salMese(mese(2099, 5, {}), { noExtra: true }).dispFut, 0, "senza mese prima non c'è nulla da pianificare");
 });
+
+test("mancato riposo scelto a mano dal calendario (anche su un giorno senza R1/R2 nel codice)", () => {
+  const api = nuovo(); api.SAL.cfg.percMR1 = "100";
+  const nov = mese(2026, 11, {}), dic = mese(2026, 12, {}); aggiungi(api, nov, dic);
+  api.OV["2026-11:11"] = { tipo: "variazione", inizio: "15:00", fine: "21:00", mr: "R1" };
+  const b = api.salMese(dic); vicino(b.mrH, 6, "ore"); vicino(b.vMR, 6 * 10 * 2, "importo R1 al 100%"); vicino(b.ordH, 0, "non è allungo");
+});
