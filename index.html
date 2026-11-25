@@ -2294,7 +2294,10 @@ function sharesTo(e, g) { return Array.isArray(e.gruppi) ? e.gruppi.includes(g) 
 function sgHtml(d) {
   const gs = CC.mine.filter(g => CC.groups.has(g));
   if (!gs.length) return `<p class="muted" style="font-size:12px;margin:6px 0 0">Non sei in nessun gruppo: lo statino resta solo sul tuo telefono.</p>`;
-  return `<div class="chips" style="margin:6px 0 0"><span class="muted" style="font-size:12px">Condividi con:</span>${gs.map(g => `<span class="chip ${d.gruppi.includes(g) ? "sel" : ""}" data-sg="${esc(g)}">${esc(CC.groups.get(g).nome)}</span>`).join("")}</div>`;
+  const tutti = gs.every(g => d.gruppi.includes(g)), nessuno = !d.gruppi.some(g => gs.includes(g));
+  return `<div style="margin:8px 0 0"><div class="muted" style="font-size:12px;margin-bottom:4px">Chi può vedere questo statino?</div>
+    <div class="chips" style="margin:0"><span class="chip ${nessuno ? "sel" : ""}" data-sgm="none">🔒 Solo io</span>${gs.length > 1 ? `<span class="chip ${tutti ? "sel" : ""}" data-sgm="all">👥 Tutti i miei gruppi</span>` : ""}${gs.map(g => `<span class="chip ${d.gruppi.includes(g) && !(tutti && gs.length > 1) ? "sel" : ""}" data-sg="${esc(g)}">${esc(CC.groups.get(g).nome)}</span>`).join("")}</div>
+    <p class="muted" style="font-size:11px;margin:4px 0 0">${nessuno ? "Resta solo sul tuo telefono: lo usi per le statistiche e per tenere traccia dei voli." : "Chi è nei gruppi scelti lo vede e riceve un avviso. Puoi sceglierne uno, più di uno o tutti."}</p></div>`;
 }
 // ================= PROPOSTE ("ti va un caffè?") ai colleghi che sono al terminal scelto =================
 // Ogni proposta è un documento in "proposte": la vedono solo chi la invia e i destinatari. Nessun numero di telefono.
@@ -5055,6 +5058,7 @@ function renderDraft(msg) {
   $("addfl").onclick = () => { d.voli.push({}); renderDraft(msg); };
   $("stedit").querySelectorAll("[data-rit]").forEach(c => c.onclick = () => { d.rit = !d.rit; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-fine]").forEach(c => c.onclick = () => { d.fineT = !d.fineT; renderDraft(msg); });
+  $("stedit").querySelectorAll("[data-sgm]").forEach(c => c.onclick = () => { const gs = CC.mine.filter(g => CC.groups.has(g)); d.gruppi = c.dataset.sgm === "all" ? gs : []; renderDraft(msg); });
   $("stedit").querySelectorAll("[data-sg]").forEach(c => c.onclick = () => { const g = c.dataset.sg; d.gruppi = d.gruppi.includes(g) ? d.gruppi.filter(x => x !== g) : d.gruppi.concat([g]); renderDraft(msg); });
   $("stcancel").onclick = () => { ST.draft = null; ST.img = null; $("stedit").innerHTML = ""; };
   $("stsave").onclick = saveDraft;
