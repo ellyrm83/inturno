@@ -258,6 +258,7 @@ h2{font-size:16px;margin:0 0 8px}
 /* ===== HOME a icone: niente barra in basso, ogni pagina si apre dalla Home ===== */
 .tabs,.modesw{display:none!important}
 .wrap{padding-bottom:44px}
+.hero{display:none!important}
 body:not([data-tab=home]) .hero,body:not([data-tab=home]) #home-prof,body:not([data-tab=home]) #home-adm{display:none}
 body:not([data-tab=home]) #t-home{display:none}
 .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;background:var(--bg);padding:10px 0 8px;margin:0 0 8px}
@@ -295,7 +296,7 @@ body[data-tab=home] .topbar{display:none}
 
 
     <div class="topbar"><button id="tbhome">‹ Home</button><b id="tbtitle"></b></div>
-  <section id="t-home"><div id="home-oggi"></div><div class="qk"><button class="btn" id="qkfoto">📷 Statino da foto</button><button class="btn ghost" id="qkman">✍️ A mano</button><button class="btn ghost" id="qkwho">🗺️ Chi c'è adesso</button></div><div class="tiles" id="tiles"></div><div id="home-prof"><div class="card" id="prof"></div></div><div id="home-adm"><div class="card hidden" id="admin"></div></div></section>
+  <section id="t-home"><h1 style="font-size:24px;font-weight:800;color:var(--acc);margin:6px 2px 10px;letter-spacing:-.3px">InTurno</h1><div id="home-oggi"></div><div class="qk"><button class="btn" id="qkfoto">📷 Statino da foto</button><button class="btn ghost" id="qkman">✍️ A mano</button><button class="btn ghost" id="qkwho">🗺️ Chi c'è adesso</button></div><div class="tiles" id="tiles"></div><div id="home-prof"><div class="card" id="prof"></div></div><div id="home-adm"><div class="card hidden" id="admin"></div></div></section>
 
   <section id="t-car" class="card hidden"><div id="car"></div></section>
   <section id="t-stats" class="card hidden"><h3>📊 Statistiche</h3><div id="statpage"></div></section>
