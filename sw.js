@@ -1,5 +1,5 @@
 // Service worker: l'app si apre anche senza rete (i dati si sincronizzano appena torna la connessione)
-const CACHE = "inturno-v82";
+const CACHE = "inturno-v83";
 const FILES = ["./", "index.html", "config.js", "adapter.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-180.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -20,4 +20,4 @@ self.addEventListener("fetch", e => {
 
 self.addEventListener("notificationclick", e => { e.notification.close(); e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(ws => { for (const w of ws) { if ("focus" in w) return w.focus(); } return clients.openWindow("./"); })); });
 // avvisi ad app chiusa: arriva solo "c'è una novità" (nessun contenuto passa dal servizio)
-self.addEventListener("push", e => { e.waitUntil(self.registration.showNotification("InTurno", { body: "C'è una novità su InTurno. Tocca per aprire.", icon: "icon-192.png", badge: "icon-192.png", tag: "inturno-push", renotify: true, data: { url: "./" } })); });
+self.addEventListener("push", e => { let m = null; try { m = e.data && e.data.json(); } catch (x) {} const t = m && m.t ? m.t : "InTurno", b = m && m.b ? m.b : "C'è una novità su InTurno. Tocca per aprire."; e.waitUntil(self.registration.showNotification(t, { body: b, icon: "icon-192.png", badge: "icon-192.png", tag: "inturno-push", renotify: true, data: { url: "./" } })); });

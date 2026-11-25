@@ -2162,17 +2162,17 @@ async function pushSubscribe() {
 async function pushUnsub() { try { const r = await navigator.serviceWorker.ready, sub = await r.pushManager.getSubscription(); if (sub) { const tok = await pushToken(); if (tok) await fetch(PUSH.url.replace(/\/$/, "") + "/unsub", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {}); await sub.unsubscribe(); } } catch (e) {} try { localStorage.removeItem("inturno.pushSub"); } catch {} }
 const PUSHQ = { last: (() => { try { return JSON.parse(localStorage.getItem("inturno.pushLast") || "{}"); } catch { return {}; } })() };
 async function pushOwner(why) { try { const o = await firebase.firestore().doc("config/owner").get(); if (o.exists && o.data().uid) pushPing([o.data().uid], why); } catch (e) {} }
-async function pushPing(uids, why, sig) {
+async function pushPing(uids, why, sig, msg) {
   if (!pushReady() || !uids || !uids.length) return;
   if (sig != null) { if (PUSHQ.last[why] === sig) return; PUSHQ.last[why] = sig; try { localStorage.setItem("inturno.pushLast", JSON.stringify(PUSHQ.last)); } catch {} }
   const to = [...new Set(uids)].filter(u => u && u !== ST.uid).slice(0, 50); if (!to.length) return;
-  try { const tok = await pushToken(); if (!tok) return; await fetch(PUSH.url.replace(/\/$/, "") + "/send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ to, tipo: String(why).split(":")[0] }) }); } catch (e) {}
+  try { const tok = await pushToken(); if (!tok) return; await fetch(PUSH.url.replace(/\/$/, "") + "/send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok }, body: JSON.stringify({ to, tipo: String(why).split(":")[0], msg: msg || undefined }) }); } catch (e) {}
 }
 setTimeout(() => { try { if (pushReady() && NTF.seen.__off !== true && typeof Notification !== "undefined" && Notification.permission === "granted" && localStorage.getItem("inturno.pushSub") !== isoDay(new Date())) setTimeout(() => pushSubscribe().catch(() => {}), 8000); } catch (e) {} }, 0);
 function pushPanelHtml() {
   if (!pushReady()) return `<p class="muted" style="font-size:12px;margin-top:6px">📴 Avvisi ad app chiusa: ${window.__isOwner ? "non ancora attivati. Segui le istruzioni nel file che ti ho mandato (servizio gratuito Cloudflare, 10 minuti)." : "non ancora disponibili."} Intanto per i tuoi turni metti il mese nel calendario del telefono: gli avvisi arrivano anche ad app chiusa.</p>`;
   let on = false; try { on = !!localStorage.getItem("inturno.pushSub"); } catch {}
-  return `<p class="muted" style="font-size:12px;margin-top:6px">${on ? "📲 Avvisi anche ad app chiusa: <b>attivi</b> su questo telefono." : "📲 Avvisi ad app chiusa: si attivano insieme alle notifiche."} Ti arriva solo "c'è una novità": cosa sia lo vedi aprendo l'app.${/iPhone|iPad/.test(navigator.userAgent) ? " Su iPhone funziona solo aprendo InTurno dalla schermata Home." : ""}</p>`;
+  return `<p class="muted" style="font-size:12px;margin-top:6px">${on ? "📲 Avvisi anche ad app chiusa: <b>attivi</b> su questo telefono." : "📲 Avvisi ad app chiusa: si attivano insieme alle notifiche."} Per gli statini ti dice chi lo ha condiviso e il terminal; per il resto solo "c'è una novità". I turni e il contenuto li vedi aprendo l'app.${/iPhone|iPad/.test(navigator.userAgent) ? " Su iPhone funziona solo aprendo InTurno dalla schermata Home." : ""}</p>`;
 }
 
 // ================= MAPPA PER ZONE (aree d'imbarco A del T1 ed E del T3) =================
@@ -5073,7 +5073,7 @@ async function saveDraft() {
   ST.draft = null; ST.img = null;
   $("stedit").innerHTML = `<p class="muted">✓ Statino del ${esc(fmtDate(clean.data))} salvato${fw}${warn}. Resta nel Diario voli.</p>`;
   renderStList(); if (S.months.length) renderMe();
-  try { PUSHQ.st = Date.now(); (clean.gruppi || []).forEach(g => { const memb = (CC.groups.get(g) || {}).membri || []; pushPing(memb, "statino:" + g, clean.id + ":" + (clean.salvato || "")); }); } catch (e) {}
+  try { PUSHQ.st = Date.now(); (clean.gruppi || []).forEach(g => { const memb = (CC.groups.get(g) || {}).membri || []; pushPing(memb, "statino:" + g, clean.id + ":" + (clean.salvato || ""), { t: "📋 Statino condiviso", b: `${String(P.name || "Qualcuno").split(/[ ,]+/)[0].replace(/^./, c => c.toUpperCase()).replace(/(?<=.)./g, c => c.toLowerCase())} ha condiviso lo statino${/^T[1-5]$/.test(clean.terminal || "") ? " · Terminal " + clean.terminal[1] : ""}` }); }); } catch (e) {}
   publishSoon();
 }
 async function delEntry(id) {

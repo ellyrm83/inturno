@@ -25,5 +25,7 @@ Dopo, apri InTurno dal telefono, tocca "Attiva notifiche" e consenti gli avvisi.
 Su iPhone l'app deve essere aperta dalla schermata Home.
 
 ## Cosa passa dal servizio
-Solo l'indirizzo anonimo del telefono e il segnale "c'è una novità". Nessun turno, nome, importo o statino.
+- Statino condiviso: un avviso breve cifrato, tipo "Elisa ha condiviso lo statino · Terminal 1". Lo legge solo il telefono che lo riceve.
+- Altri avvisi: solo "c'è una novità".
+- Mai turni, importi o il contenuto dei voli.
 Ogni persona può mandare al massimo 60 avvisi all'ora.
