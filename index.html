@@ -883,7 +883,7 @@ function renderMe() {
     const t = (c.kind === "lavoro" && nightH(c) ? `<span class="nt">🌙${fmtH(Math.round(nightH(c) * 100) / 100)}h</span>` : "") + (nv ? `<br><span class="pl">✈${nv}</span>` : "");
     h += `<td><div class="cell k-${c.kind} ${c.mod ? "mod" : ""} ${c.pred ? "pred" : ""}" data-day="${i}"><span class="n">${i + 1}${c.mod ? " ✎" : ""}</span><span class="c">${c.kind === "lavoro" ? `${hhmm(c.start)}<br>${hhmm(c.end)}` : c.kind === "ignoto" ? "" : esc(c.label)}</span>${isoTag(m, name, i, c)}${c.imp ? `<span class="pl">📌</span>` : ""}<span>${t}</span></div></td>`;
   });
-  h += `</tr></table><div class="stbtn" style="margin-top:10px"><button class="btn ghost" id="bulkbtn">📝 Richiesta variazione (più giorni)</button><button class="btn" id="wabtn">📲 Variazione da screenshot</button></div>${m.month && !m.predicted ? `<div class="stbtn" style="margin-top:8px"><button class="btn ghost" id="cxquick">📅 Metti ${esc(MESI[m.month - 1])} nel calendario del telefono</button></div>` : ""}${calExportHtml()}${name === findIn(m, P.name) ? cntHtml() + statHtml() : ""}${ferieHtml()}${historyHtml(name)}<p class="muted" style="margin:8px 0 0">Tocca un giorno per modificarlo (cambio turno, malattia, 104, congedo, donazione sangue, variazione orario).</p><div id="ovedit"></div>`;
+  h += `</tr></table><div class="stbtn" style="margin-top:10px"><button class="btn ghost" id="bulkbtn">📝 Richiesta variazione (più giorni)</button><button class="btn" id="wabtn">📲 Variazione da screenshot</button></div>${m.month && !m.predicted ? `<div class="stbtn" style="margin-top:8px"><button class="btn ghost" id="cxquick">📅 Metti ${esc(MESI[m.month - 1])} nel calendario del telefono</button></div>` : ""}${calExportHtml()}${name === findIn(m, P.name) ? cntHtml() : ""}${ferieHtml()}<p class="muted" style="margin:8px 0 0">Tocca un giorno per modificarlo (cambio turno, malattia, 104, congedo, donazione sangue, variazione orario).</p><div id="ovedit"></div>`;
   out.innerHTML = h;
   out.querySelectorAll("[data-day]").forEach(el => el.onclick = () => { if (S.bulk) { const i = +el.dataset.day; S.bulk.days.has(i) ? S.bulk.days.delete(i) : S.bulk.days.add(i); drawBulk(m, name); } else openOv(m, name, +el.dataset.day); });
   $("bulkbtn").onclick = () => { S.ovOpen = null; S.bulk = { key: m.key, days: new Set(), d: { tipo: "ferie", codice: "", inizio: "", fine: "", ore: "", dove: "fine", nota: "" } }; drawBulk(m, name); $("ovedit").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
@@ -2151,7 +2151,7 @@ function statHtml() {
       <tr class="tot"><td>Tot.</td><td>${T.gg}</td><td>${r1(T.ore)}</td><td>${r1(T.nott)}</td><td>${T.fest}</td><td>${T.dom}</td><td>${r1(T.all)}</td><td>${r1(T.str)}</td><td>${T.mal}</td><td>${T.fer}</td></tr></table></div>
     <p class="muted" style="font-size:11px">Allunghi e straordinari compaiono se li segni nei giorni (Stipendio → ore in più).</p></details>`;
 }
-function statBind(root) { const d = root.querySelector("#statd"); if (!d) return; d.ontoggle = () => { S.statOpen = d.open; }; root.querySelectorAll("[data-staty]").forEach(c => c.onclick = () => { S.statY = +c.dataset.staty; S.statOpen = true; renderMe(); }); }
+function statBind(root) { const d = root.querySelector("#statd"); if (!d) return; d.ontoggle = () => { S.statOpen = d.open; }; root.querySelectorAll("[data-staty]").forEach(c => c.onclick = () => { S.statY = +c.dataset.staty; S.statOpen = true; renderMe(); try { renderStat(); } catch (e) {} }); }
 
 // ================= OGGI / DOMANI (in cima alla pagina Turni) =================
 function myDayCode(dt) { if (!P.name) return null; const m = S.months.find(x => x.year === dt.getFullYear() && x.month === dt.getMonth() + 1); if (!m) return null; const n = findIn(m, P.name); if (!n) return null; return { m, c: codesOf(m, n)[dt.getDate() - 1] || null }; }
@@ -2305,7 +2305,9 @@ function renderStat() {
     const ys = stYears(); if (!ys.length) { el.innerHTML = `<p class="muted">Carica turni, buste o statini per vedere le statistiche.</p>`; return; }
     const cur = new Date().getFullYear(), Y = S.stY && ys.includes(S.stY) ? S.stY : ys.includes(cur) ? cur : ys[ys.length - 1];
     el.innerHTML = `<div class="ovtypes" style="margin:0 0 10px">${ys.map(y => `<span class="chip ${y === Y ? "sel" : ""}" data-sty="${y}">${y}</span>`).join("")}</div>`
-      + stStipHtml(Y) + stTurniHtml(Y) + stNotteHtml(Y) + stPauseHtml(Y);
+      + stStipHtml(Y) + stTurniHtml(Y) + stNotteHtml(Y) + stPauseHtml(Y)
+      + (P.name ? statHtml().replace('id="statd" ','id="statd" open ') + historyHtml(P.name).replace('<details class="hist" open>', '<details class="hist">') : "");
+    statBind(el); el.querySelectorAll("[data-hm]").forEach(x => x.onclick = () => { S.cur = +x.dataset.hm; S.curKey = S.months[S.cur].key; renderAll(); document.querySelector('.tab[data-t="me"]').click(); });
     el.querySelectorAll("[data-sty]").forEach(c => { c.onclick = () => { S.stY = +c.dataset.sty; renderStat(); }; });
   } catch (e) { console.warn(e); el.innerHTML = `<p class="muted">Non riesco a calcolare le statistiche: ${esc(e && e.message || e)}</p>`; }
 }
